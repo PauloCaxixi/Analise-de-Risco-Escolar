@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Risco de Defasagem Escolar</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h2>📊 Análise de Risco Escolar</h2>
+
+        <form action="/predict" method="post">
+
+            <label>Idade do aluno</label>
+            <input type="number" name="idade" step="1" required>
+            <small>Informe a idade atual do estudante (ex: 12, 15, 17)</small>
+
+            <label>INDE 2022</label>
+            <input type="number" name="inde22" step="0.1" required>
+            <small>Nota de desempenho educacional no ano de 2022 (0 a 10)</small>
+
+            <label>INDE 2023</label>
+            <input type="number" name="inde23" step="0.1" required>
+            <small>Nota de desempenho educacional no ano de 2023 (0 a 10)</small>
+
+            <label>INDE 2024</label>
+            <input type="number" name="inde24" step="0.1" required>
+            <small>Nota de desempenho educacional no ano de 2024 (0 a 10)</small>
+
+            <label>Aluno está ativo no programa?</label>
+            <div class="radio-group">
+                <input type="radio" id="ativo_sim" name="ativo" value="1" required>
+                <label for="ativo_sim" class="radio-btn">Sim</label>
+
+                <input type="radio" id="ativo_nao" name="ativo" value="0">
+                <label for="ativo_nao" class="radio-btn">Não</label>
+            </div>
+            <small>Informe se o aluno está matriculado e frequentando atualmente.</small>
+
+            <button type="submit">Gerar Previsão</button>
+        </form>
+
+
+        {% if resultado is not none %}
+        <div class="resultado">
+            <p><strong>Risco de Defasagem:</strong> {{ resultado }}</p>
+            <p><strong>Probabilidade:</strong> {{ probabilidade }}%</p>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

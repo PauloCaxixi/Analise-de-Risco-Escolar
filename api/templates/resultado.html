@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Resultados das Previsões</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+    <h1>📊 Histórico de Previsões</h1>
+
+    {% for item in historico %}
+    <div class="resultado-card">
+        <p><strong>Idade:</strong> {{ item.idade }}</p>
+        <p><strong>Média INDE:</strong> {{ item.media_inde }}</p>
+        <p><strong>Qtde INDE abaixo de 6:</strong> {{ item.qtde_baixo6 }}</p>
+        <p><strong>Aluno Ativo:</strong> {{ "Sim" if item.ativo == 1 else "Não" }}</p>
+        <p><strong>Risco:</strong> {{ item.risco }}</p>
+        <p><strong>Probabilidade:</strong> {{ item.prob }}%</p>
+    </div>
+    {% endfor %}
+
+    <a href="/nova"><button>➕ Nova Previsão</button></a>
+    <a href="/limpar" style="flex:1;">
+        <button type="button" style="background: linear-gradient(90deg, #ef4444, #dc2626);">
+            Limpar Histórico
+        </button>
+    </a>
+</div>
+</body>
+</html>
