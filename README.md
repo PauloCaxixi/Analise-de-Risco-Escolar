@@ -1,20 +1,3 @@
-Perfeito, Paulo 👍
-Agora vamos **fechar com chave de ouro**.
-Abaixo está **o BLOCO FINAL**, com:
-
-1️⃣ **README.md completo (nota máxima)**
-2️⃣ **Roteiro do vídeo (5 minutos, fala pronta)**
-
-Tudo alinhado **exatamente** com o edital da FIAP e com linguagem que professor gosta de ouvir.
-
----
-
-# 📘 README.md (COMPLETO)
-
-Você pode **copiar e colar** isso no seu repositório GitHub como `README.md`.
-
----
-
 ## 📌 Projeto Datathon – Associação Passos Mágicos
 
 **Previsão de Risco de Defasagem Escolar**
