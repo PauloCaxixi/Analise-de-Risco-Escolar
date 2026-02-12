@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="topbar">
+    <div>
+      <h2 style="margin:0">Alunos</h2>
+      <div class="muted">Mostrando até {{ limit }} registros (use busca para filtrar)</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <form method="get" action="/students" class="row" style="align-items:flex-end">
+      <div style="flex:2;min-width:260px">
+        <label>Buscar (Nome ou RA)</label>
+        <input name="q" value="{{ q or '' }}" placeholder="Ex.: Maria / 12345" />
+      </div>
+
+      <div style="flex:1;min-width:160px">
+        <label>Limite</label>
+        <input name="limit" value="{{ limit }}" type="number" min="50" max="500" />
+      </div>
+
+      <div>
+        <button class="btn" type="submit">Filtrar</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr class="muted">
+          <th style="text-align:left;padding:8px;border-bottom:1px solid #24314d">RA</th>
+          <th style="text-align:left;padding:8px;border-bottom:1px solid #24314d">Aluno</th>
+          <th style="text-align:left;padding:8px;border-bottom:1px solid #24314d">Def. 2022</th>
+          <th style="text-align:left;padding:8px;border-bottom:1px solid #24314d">Def. 2023</th>
+          <th style="text-align:left;padding:8px;border-bottom:1px solid #24314d">Def. 2024</th>
+          <th style="text-align:left;padding:8px;border-bottom:1px solid #24314d">Última previsão</th>
+          <th style="text-align:left;padding:8px;border-bottom:1px solid #24314d">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in students %}
+        <tr>
+          <td style="padding:8px;border-bottom:1px solid #24314d">{{ s.student_code or "-" }}</td>
+          <td style="padding:8px;border-bottom:1px solid #24314d">{{ s.full_name }}</td>
+          <td style="padding:8px;border-bottom:1px solid #24314d">{{ s.def_2022 if s.def_2022 is not none else "-" }}</td>
+          <td style="padding:8px;border-bottom:1px solid #24314d">{{ s.def_2023 if s.def_2023 is not none else "-" }}</td>
+          <td style="padding:8px;border-bottom:1px solid #24314d">{{ s.def_2024 if s.def_2024 is not none else "-" }}</td>
+          <td style="padding:8px;border-bottom:1px solid #24314d">
+            {% if s.last_pred is not none %}
+              {{ s.last_pred }}
+            {% else %}
+              -
+            {% endif %}
+          </td>
+          <td style="padding:8px;border-bottom:1px solid #24314d">
+            <a class="pill" href="/students/{{ s.id }}">Abrir</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

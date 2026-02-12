@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2 style="margin:0">Previsões de Risco de Defasagem</h2>
+    <div class="muted">
+      Selecione o aluno e clique em <b>Gerar previsão</b>.
+      O sistema usa automaticamente o ano mais recente disponível.
+    </div>
+  </div>
+</div>
+
+{% if error %}
+  <div class="card">
+    <div class="err">{{ error }}</div>
+  </div>
+{% endif %}
+
+<!-- FORMULÁRIO -->
+<div class="card">
+  <form method="post" action="/predictions/run" class="row" style="align-items:flex-end; gap:16px">
+    <div style="flex:2; min-width:320px">
+      <label>Aluno</label>
+      <select
+        name="student_id"
+        required
+        style="
+          width:100%;
+          padding:12px;
+          border-radius:10px;
+          border:1px solid #2a395a;
+          background:#0e1628;
+          color:#e7eaf0;
+        "
+      >
+        <option value="">Selecione um aluno…</option>
+        {% for s in (students or []) %}
+          <option value="{{ s.id }}">
+            {{ s.full_name }}
+            {% if s.student_code %} (RA {{ s.student_code }}){% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <button class="btn" type="submit">Gerar previsão</button>
+    </div>
+  </form>
+</div>
+
+<!-- RESULTADO -->
+{% if result %}
+<div class="card">
+  <h3 style="margin-top:0">Resultado da Análise</h3>
+
+  <!-- STATUS PRINCIPAL -->
+  <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px">
+    <span class="pill {{ result.risk_level|lower }}">
+      {{ result.risk_level }}
+    </span>
+    <span class="pill">
+      {{ result.status }}
+    </span>
+  </div>
+
+    <p class="muted">
+    Probabilidade estimada de risco:
+    <b>{{ (result.risk_probability * 100) | round(1) }}%</b>
+    </p>
+
+    {% if result.destaque_ieg is not none %}
+    <p class="muted">
+        Destaque em Engajamento (IEG):
+        <b>{{ result.destaque_ieg }}</b>
+    </p>
+
+    {% if result.destaque_ieg in [1, "1", True, "True", "SIM", "Sim", "sim"] %}
+        <div style="margin-top:10px; padding:12px; border-radius:10px; background:#0f1b33; border:1px solid #243a6b;">
+        <b>Observação:</b> Este aluno apresenta <b>destaque de engajamento</b>. Reforce desafios e metas semanais para sustentar notas altas.
+        </div>
+    {% endif %}
+    {% endif %}
+
+    {% if result.feature_coverage is not none %}
+    <p class="muted" style="margin-top:10px">
+        Cobertura de dados do modelo:
+        <b>{{ (result.feature_coverage * 100) | round(1) }}%</b>
+        ({{ result.features_filled }}/{{ result.features_expected }})
+    </p>
+    {% endif %}
+
+
+  <!-- RECOMENDAÇÃO -->
+  <div
+    style="
+      margin-top:12px;
+      padding:14px;
+      border-radius:10px;
+      background:#0f1b33;
+      border:1px solid #243a6b;
+    "
+  >
+    <b>Recomendação:</b><br>
+    {{ result.recommended_action }}
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

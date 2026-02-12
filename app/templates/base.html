@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{{ title or "Plataforma - Passos Mágicos" }}</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#0b1220;color:#e7eaf0;margin:0}
+    a{color:#9fc0ff;text-decoration:none}
+    a:hover{text-decoration:underline}
+
+    .layout{display:flex;min-height:100vh}
+    .sidebar{
+      width:260px;flex:0 0 260px;
+      background:#0e1628;border-right:1px solid #24314d;
+      padding:18px 14px;position:sticky;top:0;height:100vh;
+    }
+    .brand{font-size:16px;font-weight:700;margin:6px 10px 14px}
+    .nav{display:flex;flex-direction:column;gap:8px}
+    .nav a{
+      display:block;padding:10px 12px;border-radius:12px;
+      border:1px solid #24314d;background:#121a2b;
+    }
+    .nav a.active{outline:2px solid #2b6ef5}
+    .main{flex:1;padding:24px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+    .pill{display:inline-block;padding:6px 10px;border-radius:999px;background:#0e1628;border:1px solid #24314d}
+    .card{background:#121a2b;border:1px solid #24314d;border-radius:14px;padding:18px;margin:14px 0}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    .btn{background:#2b6ef5;border:none;color:white;padding:10px 14px;border-radius:10px;cursor:pointer}
+    .btn:hover{opacity:.9}
+    .muted{color:#9fb0d0}
+    input, textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #2a395a;background:#0e1628;color:#e7eaf0}
+    textarea{min-height:220px;font-family:ui-monospace,Consolas,monospace}
+    .err{color:#ffb4b4}
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">Plataforma Passos Mágicos</div>
+      <div class="muted" style="margin:0 10px 12px">Sistema único: alunos, notas e previsões.</div>
+
+      <nav class="nav">
+        <a href="/" class="{{ 'active' if active=='home' else '' }}">🏠 Dashboard</a>
+        <a href="/students" class="{{ 'active' if active=='students' else '' }}">👩‍🎓 Alunos</a>
+        <a href="/grades" class="{{ 'active' if active=='grades' else '' }}">📝 Notas / Features</a>
+        <a href="/predictions" class="{{ 'active' if active=='predictions' else '' }}">🔮 Previsões</a>
+        <a href="/admin/users" class="{{ 'active' if active=='admin_users' else '' }}">⚙️ Usuários</a>
+      </nav>
+
+      <div style="margin-top:16px" class="row">
+        {% if user %}
+          <span class="pill">Logado: <b>{{ user.username }}</b></span>
+          <a class="pill" href="/logout">Sair</a>
+        {% else %}
+          <a class="pill" href="/login">Entrar</a>
+        {% endif %}
+      </div>
+    </aside>
+
+    <main class="main">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

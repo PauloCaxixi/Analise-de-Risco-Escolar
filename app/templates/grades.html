@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="topbar">
+    <div>
+      <h2 style="margin:0">Notas / Features</h2>
+      <div class="muted">Consulta dos dados importados do PEDE (somente leitura).</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <form method="get" action="/grades" class="row" style="align-items:flex-end">
+      <div style="flex:2;min-width:280px">
+        <label>Aluno</label>
+        <select name="student_id" style="width:100%;padding:10px;border-radius:10px;border:1px solid #2a395a;background:#0e1628;color:#e7eaf0">
+          <option value="">Selecione...</option>
+          {% for s in students %}
+            <option value="{{ s.id }}" {% if selected_student_id==s.id %}selected{% endif %}>
+              {{ s.full_name }} {% if s.student_code %}(RA {{ s.student_code }}){% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="flex:1;min-width:200px">
+        <label>Ano</label>
+        <select name="reference_year" style="width:100%;padding:10px;border-radius:10px;border:1px solid #2a395a;background:#0e1628;color:#e7eaf0">
+          <option value="PEDE2022" {% if reference_year=='PEDE2022' %}selected{% endif %}>PEDE2022</option>
+          <option value="PEDE2023" {% if reference_year=='PEDE2023' %}selected{% endif %}>PEDE2023</option>
+          <option value="PEDE2024" {% if reference_year=='PEDE2024' %}selected{% endif %}>PEDE2024</option>
+        </select>
+      </div>
+
+      <div>
+        <button class="btn" type="submit">Ver dados</button>
+      </div>
+    </form>
+  </div>
+
+  {% if error %}
+    <div class="card"><div class="err">{{ error }}</div></div>
+  {% endif %}
+
+  {% if features %}
+    <div class="card">
+      <h3 style="margin-top:0">Features importadas ({{ reference_year }})</h3>
+      <div class="muted" style="margin-bottom:10px">
+        Total de campos: <b>{{ features|length }}</b>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr class="muted">
+            <th style="text-align:left;padding:8px;border-bottom:1px solid #24314d">Campo</th>
+            <th style="text-align:left;padding:8px;border-bottom:1px solid #24314d">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for k, v in features.items() %}
+            <tr>
+              <td style="padding:8px;border-bottom:1px solid #24314d">{{ k }}</td>
+              <td style="padding:8px;border-bottom:1px solid #24314d">{{ v }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+{% endblock %}

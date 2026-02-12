@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="card" style="max-width:420px;margin:60px auto;">
+    <h2 style="margin-top:0">Login</h2>
+    <p class="muted">Plataforma Passos Mágicos</p>
+
+    {% if error %}
+      <div class="err" style="margin-bottom:12px">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/login">
+      <div style="margin-bottom:12px">
+        <label>Usuário</label>
+        <input name="username" autocomplete="username" required />
+      </div>
+
+      <div style="margin-bottom:16px">
+        <label>Senha</label>
+        <input name="password" type="password" autocomplete="current-password" required />
+      </div>
+
+      <button class="btn" type="submit" style="width:100%">Entrar</button>
+    </form>
+
+    <p class="muted" style="margin-top:16px;font-size:13px">
+      Primeiro acesso: <span class="pill">admin</span> <span class="pill">admin123</span>
+    </p>
+  </div>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="row" style="justify-content:space-between">
+    <div>
+      <h2 style="margin:0">{{ student.full_name }}</h2>
+      <div class="muted">Aluno ID {{ student.id }} • {{ student.grade_level or "-" }} • {{ student.class_name or "-" }}</div>
+    </div>
+    <div class="row">
+      <a class="pill" href="/students">Voltar</a>
+      <a class="pill" href="/logout">Sair</a>
+    </div>
+  </div>
+
+    <div class="card">
+    <h3 style="margin-top:0">Ações rápidas</h3>
+    <div class="row">
+        <a class="btn" href="/grades">Salvar/Atualizar Notas (snapshot)</a>
+        <a class="btn" href="/predictions">Gerar Previsão</a>
+    </div>
+    </div>
+
+    <div class="card">
+    <h3 style="margin-top:0">Histórico</h3>
+    <p class="muted">O painel detalhado do histórico por aluno será exibido aqui no próximo bloco.</p>
+    </div>
+
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>{{ panel.student.full_name }}</h2>
+  <div class="muted">Painel completo do aluno</div>
+
+  <div class="card">
+    <h3>Previsão automática</h3>
+    <form method="post" action="/students/{{ panel.student.id }}/predict">
+      <button class="btn">Gerar nova previsão</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Histórico</h3>
+    <table style="width:100%">
+      <thead>
+        <tr class="muted">
+          <th>Ano</th>
+          <th>Score</th>
+          <th>Label</th>
+          <th>Modelo</th>
+          <th>Data</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in panel.history %}
+        <tr>
+          <td>{{ h.reference_year }}</td>
+          <td>{{ h.risk_score }}</td>
+          <td>{{ h.risk_label }}</td>
+          <td>{{ h.model_version }}</td>
+          <td>{{ h.created_at }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

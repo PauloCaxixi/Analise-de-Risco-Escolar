@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="topbar">
+    <div>
+      <h2 style="margin:0">Dashboard</h2>
+      <div class="muted">Visão geral da plataforma</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card" style="flex:1;min-width:280px">
+      <h3 style="margin-top:0">Alunos</h3>
+      <p class="muted">Cadastre e gerencie alunos e turmas.</p>
+      <a class="btn" href="/students">Abrir Alunos</a>
+    </div>
+
+    <div class="card" style="flex:1;min-width:280px">
+      <h3 style="margin-top:0">Notas / Features</h3>
+      <p class="muted">Lançar/importar dados para previsões.</p>
+      <a class="btn" href="/grades">Abrir Notas</a>
+    </div>
+
+    <div class="card" style="flex:1;min-width:280px">
+      <h3 style="margin-top:0">Previsões</h3>
+      <p class="muted">Gerar risco e acompanhar histórico.</p>
+      <a class="btn" href="/predictions">Abrir Previsões</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">API</h3>
+    <p class="muted">Integrações e documentação dos endpoints.</p>
+    <div class="row">
+      <a class="pill" href="/api/docs" target="_blank">Swagger</a>
+      <a class="pill" href="/api/version" target="_blank">/api/version</a>
+      <a class="pill" href="/api/features" target="_blank">/api/features</a>
+    </div>
+  </div>
+{% endblock %}
