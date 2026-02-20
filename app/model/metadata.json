@@ -1,0 +1,47 @@
+{
+  "project": "Datathon Passos Magicos - PEDE",
+  "model_name": "risk_score_regressor",
+  "model_version": "1.0.0",
+  "trained_at": "2026-02-20T00:00:00Z",
+  "task": "regression_score_then_threshold",
+  "target": "Defasagem(t+1) -> risk_score",
+  "risk_thresholds": {
+    "muito_alto_gte": 0.85,
+    "alto_gte": 0.70,
+    "medio_gte": 0.50
+  },
+  "feature_columns": [
+    "Fase",
+    "Turma",
+    "Idade 22",
+    "Gênero",
+    "Ano ingresso",
+    "Instituição de ensino",
+    "Pedra 20",
+    "Pedra 21",
+    "Pedra 22",
+    "INDE 22",
+    "Cg",
+    "Cf",
+    "Ct",
+    "Nº Av",
+    "IAA",
+    "IEG",
+    "IPS",
+    "IDA",
+    "IPV",
+    "IAN",
+    "Matem",
+    "Portug",
+    "Inglês"
+  ],
+  "metrics": {
+    "mae": null,
+    "rmse": null,
+    "calibration_note": "risk_score thresholds are business rules; update after validation."
+  },
+  "notes": [
+    "feature_columns must match training pipeline columns after standardization",
+    "categorical features are handled by preprocessor.joblib"
+  ]
+}

@@ -1,0 +1,160 @@
+templates/base.html:
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>{% block title %}Monitor de Risco{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/static/css/style.css">
+
+  <!-- Icons -->
+  <link href="https://unpkg.com/feather-icons/dist/feather.css" rel="stylesheet">
+</head>
+
+<body>
+  <div class="layout">
+
+    <!-- =========================
+         MENU LATERAL
+    ========================== -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <span class="logo-icon">✔</span>
+          <div class="logo-text">
+            <strong>Monitor de Risco</strong>
+            <small>Prevenção de Reprovação</small>
+          </div>
+        </div>
+      </div>
+
+      <nav class="menu">
+        <a class="menu-item active" href="/dashboard">
+          <i data-feather="home"></i>
+          <span>Dashboard</span>
+        </a>
+
+        <a class="menu-item" href="/alunos-risco">
+          <i data-feather="alert-triangle"></i>
+          <span>Alunos em Risco</span>
+        </a>
+
+        <a class="menu-item" href="/alertas">
+          <i data-feather="bell"></i>
+          <span>Alertas Prioritários</span>
+          <span class="badge">{{ alertas_count }}</span>
+        </a>
+
+        <a class="menu-item" href="/turmas">
+          <i data-feather="users"></i>
+          <span>Turmas</span>
+        </a>
+
+        <a class="menu-item" href="/disciplinas">
+          <i data-feather="book"></i>
+          <span>Disciplinas</span>
+        </a>
+
+        <a class="menu-item" href="/evolucao">
+          <i data-feather="trending-up"></i>
+          <span>Evolução</span>
+        </a>
+
+        <a class="menu-item" href="/comparar-turmas">
+          <i data-feather="bar-chart-2"></i>
+          <span>Compare de Turmas</span>
+        </a>
+
+        <a class="menu-item" href="/relatorios">
+          <i data-feather="file-text"></i>
+          <span>Relatórios</span>
+        </a>
+
+        <a class="menu-item" href="/intervencoes">
+          <i data-feather="activity"></i>
+          <span>Intervenções</span>
+        </a>
+
+        <a class="menu-item" href="/configuracoes">
+          <i data-feather="settings"></i>
+          <span>Configurações</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <p class="help-text">Precisa de ajuda?</p>
+        <a class="support-btn" href="/suporte">Fale com o Suporte</a>
+      </div>
+    </aside>
+
+    <!-- =========================
+         CONTEÚDO PRINCIPAL
+    ========================== -->
+    <main class="main">
+
+      <!-- ===== TOPO ===== -->
+      <header class="topbar">
+        <div class="search-box">
+          <i data-feather="search"></i>
+          <input
+            type="text"
+            placeholder="Buscar aluno, turma ou disciplina…"
+            id="global-search"
+          />
+        </div>
+
+        <div class="topbar-right">
+          <form class="inline-form" method="get" action="/dashboard">
+            <input type="hidden" name="escola" value="{{ escola_nome }}">
+            <input type="hidden" name="q" value="{{ q }}">
+            <label class="muted">Ano base:</label>
+            <select name="sheet" class="select" onchange="this.form.submit()">
+              {% for s in available_sheets %}
+                <option value="{{ s }}" {% if s == sheet %}selected{% endif %}>
+                  {{ s.replace("PEDE", "") }}
+                </option>
+              {% endfor %}
+            </select>
+          </form>
+
+          <!-- aqui continua: Escola / notificações / usuário -->
+        </div>
+
+        <div class="topbar-actions">
+          <div class="school-select">
+            Escola:
+            <strong>{{ escola_nome }}</strong>
+          </div>
+
+          <div class="notifications">
+            <i data-feather="bell"></i>
+            <span class="badge">{{ alertas_count }}</span>
+          </div>
+
+          <div class="user-info">
+            <img src="/static/img/user.png" alt="Usuário">
+            <div>
+              <strong>Olá, {{ usuario_nome }}</strong>
+              <small>{{ usuario_cargo }}</small>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- ===== CONTEÚDO DINÂMICO ===== -->
+      <section class="content">
+        {% block content %}{% endblock %}
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/feather-icons"></script>
+  <script>
+    feather.replace();
+  </script>
+</body>
+</html>

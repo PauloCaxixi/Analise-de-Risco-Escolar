@@ -1,0 +1,197 @@
+templates/aluno_detalhe.html:
+{% extends "base.html" %}
+
+{% block title %}Detalhes do Aluno{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+  <div>
+    <h1>Detalhes do Aluno</h1>
+    <div style="margin-top:6px; color:#64748b; font-weight:700;">
+      Aluno: <strong>{{ aluno.nome }}</strong> • Turma: <strong>{{ aluno.turma }}</strong> • RA: <strong>{{ aluno.ra }}</strong>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:10px;">
+    <a class="btn btn-outline" href="/dashboard">Voltar ao Dashboard</a>
+  </div>
+</div>
+
+<!-- =========================
+     RESUMO (cards)
+========================== -->
+<div class="cards-row" style="grid-template-columns: repeat(4, minmax(0,1fr));">
+  <div class="card card-danger">
+    <div class="card-header">
+      <span class="card-title">Risco (IA)</span>
+    </div>
+    <div class="card-body">
+      <div class="card-value" style="font-size:28px;">{{ aluno.risco }}</div>
+      <div class="card-subtitle">Score: {{ aluno.risk_score }}</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Média (Disciplinas)</span>
+    </div>
+    <div class="card-body">
+      <div class="card-value">{{ aluno.media }}</div>
+      <div class="card-subtitle">Matem + Portug + Inglês</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">INDE 22</span>
+    </div>
+    <div class="card-body">
+      <div class="card-value">{{ aluno.inde_22 }}</div>
+      <div class="card-subtitle">Média geral do indicador</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Presença / Engajamento</span>
+    </div>
+    <div class="card-body">
+      <div class="card-value" style="font-size:28px;">{{ aluno.ieg }}</div>
+      <div class="card-subtitle">IEG (quando disponível)</div>
+    </div>
+  </div>
+</div>
+
+<!-- =========================
+     BLOCO PRINCIPAL (2 colunas)
+========================== -->
+<div class="main-grid" style="grid-template-columns: 2.1fr 1fr;">
+
+  <!-- ===== COLUNA ESQUERDA ===== -->
+  <div class="table-card">
+    <div class="table-header">
+      <h2>Notas e Indicadores</h2>
+      <div style="display:flex; gap:10px;">
+        <a class="btn btn-danger" href="/alertas">Ver Alertas</a>
+      </div>
+    </div>
+
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Matem</td>
+          <td>{{ aluno.matem }}</td>
+        </tr>
+        <tr>
+          <td>Portug</td>
+          <td>{{ aluno.portug }}</td>
+        </tr>
+        <tr>
+          <td>Inglês</td>
+          <td>{{ aluno.ingles }}</td>
+        </tr>
+        <tr>
+          <td>IAA</td>
+          <td>{{ aluno.iaa }}</td>
+        </tr>
+        <tr>
+          <td>IEG</td>
+          <td>{{ aluno.ieg }}</td>
+        </tr>
+        <tr>
+          <td>IPS</td>
+          <td>{{ aluno.ips }}</td>
+        </tr>
+        <tr>
+          <td>IDA</td>
+          <td>{{ aluno.ida }}</td>
+        </tr>
+        <tr>
+          <td>IPV</td>
+          <td>{{ aluno.ipv }}</td>
+        </tr>
+        <tr>
+          <td>IAN</td>
+          <td>{{ aluno.ian }}</td>
+        </tr>
+        <tr>
+          <td>Pedra 20</td>
+          <td>{{ aluno.pedra_20 }}</td>
+        </tr>
+        <tr>
+          <td>Pedra 21</td>
+          <td>{{ aluno.pedra_21 }}</td>
+        </tr>
+        <tr>
+          <td>Pedra 22</td>
+          <td>{{ aluno.pedra_22 }}</td>
+        </tr>
+        <tr>
+          <td>Rec Psicologia</td>
+          <td>{{ aluno.rec_psicologia }}</td>
+        </tr>
+        <tr>
+          <td>Indicado</td>
+          <td>{{ aluno.indicado }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===== COLUNA DIREITA ===== -->
+  <div class="side-cards">
+    <div class="card">
+      <div class="card-header">
+        <h3>Ações Recomendadas</h3>
+      </div>
+      <div class="card-body">
+        <div class="prazo">
+          <strong>Plano de Reforço</strong>
+          <span>{{ recomendacoes.plano_reforco }}</span>
+        </div>
+        <div class="prazo">
+          <strong>Acompanhamento</strong>
+          <span>{{ recomendacoes.acompanhamento }}</span>
+        </div>
+        <div class="prazo">
+          <strong>Reuniões de Pais</strong>
+          <span>{{ recomendacoes.reunioes_pais }}</span>
+        </div>
+
+        <div style="margin-top:12px; display:flex; flex-direction:column; gap:10px;">
+          <button class="btn btn-primary" type="button">Atribuir</button>
+          <button class="btn btn-warning" type="button">Enviar Alerta</button>
+          <button class="btn btn-success" type="button">Agendar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>Recuperações</h3>
+      </div>
+      <div class="card-body">
+        <div class="disciplina">
+          <span>Rec Av1</span><strong>{{ aluno.rec_av1 }}</strong>
+        </div>
+        <div class="disciplina">
+          <span>Rec Av2</span><strong>{{ aluno.rec_av2 }}</strong>
+        </div>
+        <div class="disciplina">
+          <span>Rec Av3</span><strong>{{ aluno.rec_av3 }}</strong>
+        </div>
+        <div class="disciplina">
+          <span>Rec Av4</span><strong>{{ aluno.rec_av4 }}</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
