@@ -25,7 +25,7 @@ from src.features import standardize_columns as _standardize_columns
 from src.features import calc_media_disciplinas as _calc_media_disciplinas
 
 import pandas as pd
-from flask import Flask, abort, redirect, render_template, request, url_for, Response
+from flask import Flask, abort, redirect, render_template, request, url_for, Response, flash, jsonify
 
 try:
     import joblib  # type: ignore
@@ -59,6 +59,11 @@ PREPROCESSOR_PATH = Path(os.environ.get("PEDE_PREPROCESSOR_PATH", str(MODEL_DIR 
 METADATA_PATH = Path(os.environ.get("PEDE_METADATA_PATH", str(MODEL_DIR / "metadata.json")))
 
 RISK_LABELS = ["Muito Alto", "Alto", "Médio", "Regular"]
+
+PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
+PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+
+PLANO_REFORCO_STORE = PROCESSED_DIR / "intervencoes_plano_reforco.csv"
 
 
 # =========================
@@ -564,6 +569,333 @@ def dashboard() -> Any:
         q=q or "",
     )
 
+@app.post("/predict")
+def predict() -> Response:
+    """
+    Endpoint oficial do Datathon.
+
+    Input:
+      - JSON dict (1 aluno) ou JSON list[dict] (batch)
+      - Opcional: sheet (querystring) para enriquecer dados via Excel quando só vier RA
+
+    Output:
+      - predictions: lista com {ra, risk_score, risk_label}
+      - model_version (se metadata existir)
+      - used_model: bool
+    """
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return jsonify({"error": "JSON inválido ou ausente."}), 400
+
+    # Aceita 1 registro ou batch
+    if isinstance(payload, dict):
+        rows = [payload]
+    elif isinstance(payload, list) and all(isinstance(x, dict) for x in payload):
+        rows = payload
+    else:
+        return jsonify({"error": "Formato inválido. Envie dict ou list[dict]."}), 400
+
+    sheet = request.args.get("sheet", DEFAULT_SHEET)
+    if sheet not in AVAILABLE_SHEETS:
+        sheet = DEFAULT_SHEET
+
+    df_in = pd.DataFrame(rows, dtype=object)
+    df_in = _standardize_columns(df_in)
+    df_in = df_in.loc[:, ~df_in.columns.duplicated()].copy()
+    df_in = _coerce_numeric_all(df_in)
+
+    # Se vier somente RA, tenta enriquecer buscando no XLSX (best-effort)
+    if "RA" in df_in.columns:
+        ra_series = df_in["RA"].astype(str).str.strip()
+        ra_series = ra_series[ra_series != ""]
+        if not ra_series.empty:
+            try:
+                df_base_raw = _read_xlsx_sheet(DATA_XLSX_PATH, sheet)
+                df_base = _standardize_columns(df_base_raw)
+                df_base = df_base.loc[:, ~df_base.columns.duplicated()].copy()
+                df_base["RA"] = df_base["RA"].astype(str).str.strip()
+
+                df_lookup = df_base[df_base["RA"].isin(ra_series.tolist())].copy()
+                if not df_lookup.empty:
+                    # Merge mantendo prioridade para valores do input quando existirem
+                    df_lookup = df_lookup.set_index("RA")
+                    df_in_idx = df_in.copy()
+                    df_in_idx["RA"] = df_in_idx["RA"].astype(str).str.strip()
+                    df_in_idx = df_in_idx.set_index("RA")
+
+                    merged = df_lookup.join(df_in_idx, how="left", rsuffix="_in")
+                    for c in list(df_in_idx.columns):
+                        c_in = f"{c}_in"
+                        if c_in in merged.columns:
+                            merged[c] = merged[c_in].where(
+                                merged[c_in].notna() & (merged[c_in].astype(str).str.strip() != ""),
+                                merged[c],
+                            )
+                            merged = merged.drop(columns=[c_in])
+                    df_in = merged.reset_index()
+            except Exception:
+                # best-effort: se falhar, segue com o que veio no request
+                pass
+
+    pre, model, metadata = _load_model_bundle()
+    feature_cols = metadata.get("feature_columns") if isinstance(metadata, dict) else None
+
+    used_model = bool(pre is not None and model is not None and isinstance(feature_cols, list) and len(feature_cols) > 0)
+
+    if used_model:
+        score, label = _predict_risk_with_model(df_in, pre, model, [str(c) for c in feature_cols])
+    else:
+        score, label = _predict_risk_fallback(df_in)
+
+    preds = []
+    for i in df_in.index:
+        ra = ""
+        if "RA" in df_in.columns:
+            ra = str(df_in.loc[i, "RA"]).strip()
+        preds.append(
+            {
+                "ra": ra,
+                "risk_score": float(score.loc[i]) if i in score.index else 0.0,
+                "risk_label": str(label.loc[i]) if i in label.index else "Regular",
+            }
+        )
+
+    model_version = None
+    if isinstance(metadata, dict):
+        mv = metadata.get("model_version")
+        if isinstance(mv, str) and mv.strip():
+            model_version = mv.strip()
+
+    return jsonify(
+        {
+            "model_version": model_version,
+            "used_model": used_model,
+            "predictions": preds,
+        }
+    ), 200
+
+
+def _load_df_with_risk(sheet: str, escola: Optional[str], q: Optional[str]) -> pd.DataFrame:
+    df_raw = _read_xlsx_sheet(DATA_XLSX_PATH, sheet)
+    df_std = _standardize_columns(df_raw)
+    df_std = df_std.loc[:, ~df_std.columns.duplicated()].copy()
+
+    df_filtered = _apply_filters(df_std, escola if escola and escola != "Todas" else None, q)
+
+    df = _standardize_columns(df_filtered)
+    df = df.loc[:, ~df.columns.duplicated()].copy()
+    df = _coerce_numeric(df, ["Matem", "Portug", "Inglês", "INDE 22", "IEG", "IPS"])
+
+    pre, model, metadata = _load_model_bundle()
+    if pre is not None and model is not None:
+        feature_cols = metadata.get("feature_columns")
+        if isinstance(feature_cols, list) and feature_cols:
+            score, risco = _predict_risk_with_model(df, pre, model, [str(c) for c in feature_cols])
+        else:
+            score, risco = _predict_risk_fallback(df)
+    else:
+        score, risco = _predict_risk_fallback(df)
+
+    df = df.assign(_risk_score=score, _risk_label=risco)
+    df["_media"] = df.apply(_calc_media_disciplinas, axis=1)
+    df["_media_classe"] = df["_media"].apply(_media_class)
+    return df
+
+@app.route("/intervencoes/plano-reforco", methods=["GET", "POST"])
+def intervencao_plano_reforco() -> Any:
+    sheet = request.args.get("sheet", DEFAULT_SHEET)
+    if sheet not in AVAILABLE_SHEETS:
+        sheet = DEFAULT_SHEET
+
+    escola = request.args.get("escola")
+    q = request.args.get("q")
+
+    df = _load_df_with_risk(sheet, escola, q)
+
+    # 1) Critério de risco: Alto OU Muito Alto
+    alto_mask = df["_risk_label"].isin(["Alto", "Muito Alto"])
+
+    # 2) Critério "sem recuperação": se não existir Rec Av*, considera todos como sem rec
+    rec_cols = [c for c in ["Rec Av1", "Rec Av2", "Rec Av3", "Rec Av4"] if c in df.columns]
+    if rec_cols:
+        rec_df = df[rec_cols].astype("string")
+        rec_df = rec_df.apply(lambda s: s.str.strip(), axis=0).fillna("")
+        rec_df = rec_df.replace({"nan": "", "NaN": "", "None": ""})
+        rec_present = rec_df.ne("").any(axis=1)
+    else:
+        rec_present = pd.Series(False, index=df.index, dtype="bool")
+
+    # 3) Lê confirmados e remove da lista pendente
+    store = _read_plano_reforco_store()
+    confirmados_ra = set(store[store["sheet"].astype(str) == sheet]["ra"].astype(str).str.strip().tolist())
+
+    # pendentes = alto/muito alto + sem rec + ainda não confirmado
+    pendentes_df = df.loc[alto_mask & (~rec_present)].copy()
+    pendentes_df["RA"] = pendentes_df.get("RA", "").astype(str).str.strip()
+    pendentes_df = pendentes_df[~pendentes_df["RA"].isin(confirmados_ra)]
+    pendentes_df = pendentes_df.sort_values(by="_risk_score", ascending=False, na_position="last")
+
+    pendentes: List[Dict[str, Any]] = []
+    for _, r in pendentes_df.iterrows():
+        pendentes.append(
+            {
+                "ra": str(r.get("RA", "")).strip(),
+                "nome": str(r.get("Nome", "")).strip(),
+                "turma": str(r.get("Turma", "")).strip(),
+                "media": (f"{float(r.get('_media')):.1f}".replace(".", ",") if pd.notna(r.get("_media")) else "-"),
+                "media_classe": str(r.get("_media_classe", "ok")),
+                "risco": str(r.get("_risk_label", "Regular")),
+            }
+        )
+
+    # confirmados (para o mesmo sheet)
+    confirmados_df = store[store["sheet"].astype(str) == sheet].copy()
+    confirmados: List[Dict[str, Any]] = confirmados_df.to_dict(orient="records")
+
+    if request.method == "POST":
+        selecionados = request.form.getlist("ra")
+        disciplina = (request.form.get("disciplina") or "").strip()
+        observacao = (request.form.get("observacao") or "").strip()
+        data = (request.form.get("data") or "").strip()
+
+        # grava somente os selecionados
+        selected_rows: List[Dict[str, str]] = []
+        pend_map = {p["ra"]: p for p in pendentes}
+
+        for ra in selecionados:
+            ra_s = str(ra).strip()
+            p = pend_map.get(ra_s)
+            if not p:
+                continue
+            selected_rows.append(
+                {
+                    "sheet": sheet,
+                    "ra": ra_s,
+                    "nome": str(p["nome"]),
+                    "turma": str(p["turma"]),
+                    "data": data,
+                    "disciplina": disciplina,
+                    "observacao": observacao,
+                }
+            )
+
+        msg: str
+        if selected_rows:
+            _append_plano_reforco_rows(selected_rows)
+            msg = f"Plano de reforço confirmado para {len(selected_rows)} aluno(s)."
+        else:
+            msg = "Nenhum aluno selecionado para confirmação."
+
+    return render_template(
+        "intervencao_plano_reforco.html",
+        pendentes=pendentes,
+        confirmados=_read_plano_reforco_store().query("sheet == @sheet").to_dict(orient="records"),
+        msg=msg,
+        sheet=sheet,
+        available_sheets=AVAILABLE_SHEETS,
+        escola_nome=escola or "Todas",
+        alertas_count=int(alto_mask.sum()),
+        usuario_nome="Prof. Ana",
+        usuario_cargo="Coordenadora Pedagógica",
+    )
+
+@app.route("/intervencoes/acompanhamento", methods=["GET", "POST"])
+def intervencao_acompanhamento() -> Any:
+    sheet = request.args.get("sheet", DEFAULT_SHEET)
+    if sheet not in AVAILABLE_SHEETS:
+        sheet = DEFAULT_SHEET
+
+    escola = request.args.get("escola")
+    q = request.args.get("q")
+
+    df = _load_df_with_risk(sheet, escola, q)
+
+    criterios: List[pd.Series] = []
+    if "Ativo/ Inativo" in df.columns:
+        criterios.append(df["Ativo/ Inativo"].astype(str).str.casefold().str.contains("inativ", na=False))
+    if "IEG" in df.columns:
+        criterios.append(pd.to_numeric(df["IEG"], errors="coerce") < 0.4)
+    if "IPS" in df.columns:
+        criterios.append(pd.to_numeric(df["IPS"], errors="coerce") < 0.4)
+    if "Rec Psicologia" in df.columns:
+        criterios.append(df["Rec Psicologia"].astype(str).str.strip().replace({"nan": ""}) != "")
+
+    mask = pd.concat(criterios, axis=1).any(axis=1) if criterios else pd.Series(False, index=df.index)
+
+    alvo = df[mask].copy().sort_values(by="_risk_score", ascending=False)
+
+    alunos = [
+        {
+            "ra": str(r.get("RA", "")).strip(),
+            "nome": str(r.get("Nome", "")).strip(),
+            "turma": str(r.get("Turma", "")).strip(),
+            "media": (f"{float(r.get('_media')):.1f}".replace(".", ",") if pd.notna(r.get("_media")) else "-"),
+            "media_classe": str(r.get("_media_classe", "ok")),
+            "risco": str(r.get("_risk_label", "Regular")),
+        }
+        for _, r in alvo.iterrows()
+    ]
+
+    if request.method == "POST":
+        flash(f"Alertas de acompanhamento enviados para {len(alunos)} alunos (simulação).")
+        return redirect(url_for("intervencao_acompanhamento", sheet=sheet))
+
+    return render_template(
+        "intervencao_acompanhamento.html",
+        alunos=alunos,
+        sheet=sheet,
+        available_sheets=AVAILABLE_SHEETS,
+        escola_nome=escola or "Todas",
+        alertas_count=int((df["_risk_label"].isin(["Alto", "Muito Alto"])).sum()),
+        usuario_nome="Prof. Ana",
+        usuario_cargo="Coordenadora Pedagógica",
+    )
+
+
+@app.route("/intervencoes/reuniao-pais", methods=["GET", "POST"])
+def intervencao_reuniao_pais() -> Any:
+    sheet = request.args.get("sheet", DEFAULT_SHEET)
+    if sheet not in AVAILABLE_SHEETS:
+        sheet = DEFAULT_SHEET
+
+    escola = request.args.get("escola")
+    q = request.args.get("q")
+
+    df = _load_df_with_risk(sheet, escola, q)
+
+    indicado_mask = df["Indicado"].apply(_truthy) if "Indicado" in df.columns else pd.Series(False, index=df.index)
+    alto_mask = df["_risk_label"].isin(["Alto", "Muito Alto"])
+
+    alvo = df[alto_mask & indicado_mask].copy().sort_values(by="_risk_score", ascending=False)
+
+    alunos = [
+        {
+            "ra": str(r.get("RA", "")).strip(),
+            "nome": str(r.get("Nome", "")).strip(),
+            "turma": str(r.get("Turma", "")).strip(),
+            "media": (f"{float(r.get('_media')):.1f}".replace(".", ",") if pd.notna(r.get("_media")) else "-"),
+            "media_classe": str(r.get("_media_classe", "ok")),
+            "risco": str(r.get("_risk_label", "Regular")),
+        }
+        for _, r in alvo.iterrows()
+    ]
+
+    if request.method == "POST":
+        data = (request.form.get("data") or "").strip()
+        flash(f"Reuniões agendadas para {len(alunos)} alunos em '{data or 'data não informada'}' (simulação).")
+        return redirect(url_for("intervencao_reuniao_pais", sheet=sheet))
+
+    return render_template(
+        "intervencao_reuniao_pais.html",
+        alunos=alunos,
+        sheet=sheet,
+        available_sheets=AVAILABLE_SHEETS,
+        escola_nome=escola or "Todas",
+        alertas_count=int((df["_risk_label"].isin(["Alto", "Muito Alto"])).sum()),
+        usuario_nome="Prof. Ana",
+        usuario_cargo="Coordenadora Pedagógica",
+    )
+
 @app.get("/export")
 def export_relatorio() -> Response:
     sheet = request.args.get("sheet", DEFAULT_SHEET)
@@ -829,6 +1161,44 @@ def alunos_risco() -> Any:
         escolas=escolas,
     )
 
+@app.route("/api/tendencia", methods=["GET"])
+def api_tendencia() -> dict:
+    sheet = request.args.get("sheet", DEFAULT_SHEET)
+    if sheet not in AVAILABLE_SHEETS:
+        sheet = DEFAULT_SHEET
+
+    df_raw = _read_xlsx_sheet(DATA_XLSX_PATH, sheet)
+    df_std = _standardize_columns(df_raw)
+    df_std = df_std.loc[:, ~df_std.columns.duplicated()].copy()
+    df = _coerce_numeric_all(df_std)
+
+    tendencia_media, tendencia_risco = calcular_tendencia(df)
+
+    return {
+        "labels": ["Pedra 20", "Pedra 21", "Pedra 22"],
+        "media": tendencia_media,
+        "risco": tendencia_risco,
+    }
+
+def _read_plano_reforco_store() -> pd.DataFrame:
+    if not PLANO_REFORCO_STORE.exists():
+        return pd.DataFrame(columns=["sheet", "ra", "nome", "turma", "data", "disciplina", "observacao"])
+    try:
+        return pd.read_csv(PLANO_REFORCO_STORE, sep=";", dtype=str).fillna("")
+    except Exception:
+        return pd.DataFrame(columns=["sheet", "ra", "nome", "turma", "data", "disciplina", "observacao"])
+
+
+def _append_plano_reforco_rows(rows: List[Dict[str, str]]) -> None:
+    df_old = _read_plano_reforco_store()
+    df_new = pd.DataFrame(rows, dtype=str).fillna("")
+    out = pd.concat([df_old, df_new], ignore_index=True)
+
+    # dedup por sheet+ra (mantém o primeiro registro)
+    out["_k"] = out["sheet"].astype(str) + "::" + out["ra"].astype(str)
+    out = out.drop_duplicates(subset=["_k"], keep="first").drop(columns=["_k"])
+
+    out.to_csv(PLANO_REFORCO_STORE, index=False, sep=";", encoding="utf-8-sig")
 
 @app.get("/alertas")
 def alertas() -> Any:

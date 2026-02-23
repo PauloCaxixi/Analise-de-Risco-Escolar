@@ -241,10 +241,50 @@ Confirma para eu enviar o próximo arquivo.
 
 ## 7) Rotas principais
 
+### Dashboard (UI)
 * `GET /dashboard` — tela principal
 * `GET /aluno/<ra>` — tela de detalhes do aluno
 
 ---
+
+### API de Predição (Datathon)
+
+#### `POST /predict`
+
+Endpoint oficial para inferência de risco de reprovação.
+
+O endpoint aceita **1 aluno** ou **lista de alunos** e retorna:
+- score de risco (`0.0 – 1.0`)
+- classe de risco (`Muito Alto | Alto | Médio | Regular`)
+- indicação se o modelo treinado foi usado ou fallback heurístico
+
+---
+
+#### 🔹 Exemplo 1 — Predição por RA (enriquecimento automático)
+
+```bash
+curl -X POST http://localhost:5000/predict?sheet=PEDE2022 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "RA": "123456"
+  }'
+
+
+Resposta:
+
+{
+  "model_version": "v1.0.0",
+  "used_model": true,
+  "predictions": [
+    {
+      "ra": "123456",
+      "risk_score": 0.82,
+      "risk_label": "Alto"
+    }
+  ]
+}
+
+
 
 ## 8) Observações importantes
 

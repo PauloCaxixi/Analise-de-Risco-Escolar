@@ -9,23 +9,6 @@ import pytest
 import dashboard.app as dashboard_app
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _set_env() -> None:
-    # Ajuste: garante que o app use o XLSX do projeto (se existir ao lado do app.py)
-    base_dir = Path(__file__).resolve().parents[1]
-    xlsx_default = base_dir / "BASE DE DADOS PEDE 2024 - DATATHON.xlsx"
-    if xlsx_default.exists():
-        os.environ["PEDE_XLSX_PATH"] = str(xlsx_default)
-    os.environ.setdefault("PEDE_DEFAULT_SHEET", "PEDE2022")
-
-
-@pytest.fixture()
-def client() -> Generator:
-    dashboard_app.app.config.update(TESTING=True)
-    with dashboard_app.app.test_client() as c:
-        yield c
-
-
 def test_dashboard_renders(client) -> None:
     resp = client.get("/dashboard?sheet=PEDE2022")
     assert resp.status_code == 200

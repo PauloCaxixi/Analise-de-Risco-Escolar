@@ -145,6 +145,16 @@ templates/base.html:
 
       <!-- ===== CONTEÚDO DINÂMICO ===== -->
       <section class="content">
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <div class="card" style="margin:14px 0; padding:14px 16px; border-left:6px solid #22c55e;">
+              {% for m in messages %}
+                <div style="font-weight:900;">{{ m }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
         {% block content %}{% endblock %}
       </section>
 

@@ -17,7 +17,7 @@ pip install -r requirements.txt | Out-Null
 pip install -r requirements-dev.txt | Out-Null
 
 Write-Host "==> Executando testes com cobertura..." -ForegroundColor Cyan
-pytest --cov=app --cov-report=term-missing --cov-report=html
+pytest --cov=dashboard --cov=src --cov-report=term-missing --cov-report=html --cov-fail-under=80
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ Testes falharam." -ForegroundColor Red

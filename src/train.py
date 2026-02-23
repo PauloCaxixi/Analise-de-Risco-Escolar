@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from sklearn.model_selection import StratifiedShuffleSplit
 
 import numpy as np
 import pandas as pd
@@ -102,13 +103,13 @@ def _merge_pair(df_x: pd.DataFrame, df_y: pd.DataFrame) -> pd.DataFrame:
         raise KeyError("Coluna obrigatória 'Defasagem' ausente na sheet de target.")
 
     # Merge (inner): só alunos presentes nos dois anos
+    y_target = y[["RA", "Defasagem"]].rename(columns={"Defasagem": "Defasagem_next_year"})
+
     merged = x.merge(
-        y[["RA", "Defasagem"]],
+        y_target,
         on="RA",
         how="inner",
-        suffixes=("", "_y"),
     )
-    merged = merged.rename(columns={"Defasagem_y": "Defasagem_next_year"})
     return merged
 
 
@@ -198,13 +199,27 @@ def train_and_evaluate(
     cat_cols, num_cols = choose_feature_columns(train_df)
     feature_cols = cat_cols + num_cols
 
-    x_train = train_df[feature_cols].copy()
+    x_train_full = train_df[feature_cols].copy()
 
     if not test_df.empty and "Defasagem_next_year" in test_df.columns:
         y_test = _to_binary_target(test_df["Defasagem_next_year"]).to_numpy()
-        x_test = test_df[feature_cols].copy()
+
+        test_aligned = test_df.copy()
+        missing = [c for c in feature_cols if c not in test_aligned.columns]
+        for c in missing:
+            test_aligned[c] = np.nan
+
+        x_train = x_train_full
+        x_test = test_aligned[feature_cols].copy()
     else:
-        x_test = None
+        # fallback: split estratificado no próprio train_df
+        splitter = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+        idx_train, idx_test = next(splitter.split(x_train_full, y_train))
+
+        x_train = x_train_full.iloc[idx_train].copy()
+        x_test = x_train_full.iloc[idx_test].copy()
+        y_test = y_train[idx_test].copy()
+        y_train = y_train[idx_train].copy()
 
     pre = make_preprocessor(cat_cols, num_cols)
 
@@ -270,6 +285,7 @@ def save_artifacts(
 
     joblib.dump(pre, out_dir / "preprocessor.joblib")
     joblib.dump(model, out_dir / "model.joblib")
+    joblib.dump(pipeline, out_dir / "pipeline.joblib")
 
     metadata = {
         "project": "Datathon Passos Magicos - PEDE",

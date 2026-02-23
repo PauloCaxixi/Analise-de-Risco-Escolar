@@ -134,8 +134,8 @@ def split_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
     if not cols:
         raise ValueError("Nenhuma feature válida encontrada após filtros.")
 
-    cat_cols = [c for c in cols if c in CATEGORICAL_FEATURES]
-    num_cols = [c for c in cols if c not in CATEGORICAL_FEATURES]
+    cat_cols = sorted(c for c in cols if c in CATEGORICAL_FEATURES)
+    num_cols = sorted(c for c in cols if c not in CATEGORICAL_FEATURES)
 
     return cat_cols, num_cols
 
@@ -183,8 +183,8 @@ def coerce_numeric(df: pd.DataFrame) -> pd.DataFrame:
 # =========================
 def calc_media_disciplinas(row: pd.Series) -> float:
     """
-    Calcula média simples entre Matem, Portug e Inglês,
-    ignorando valores ausentes.
+    Calcula média simples entre Matem, Portug e Inglês.
+    Uso recomendado apenas em dashboards ou apply(axis=1).
     """
     vals: List[float] = []
     for c in ("Matem", "Portug", "Inglês"):

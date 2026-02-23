@@ -200,7 +200,7 @@ templates/home.html:
       <div class="card-body">
         <div class="card-subtitle"><strong>{{ acoes.plano_reforco }}</strong> alunos sem recuperação</div>
         <div style="margin-top:12px;">
-          <button class="btn btn-primary" type="button">Atribuir</button>
+          <a class="btn btn-primary" href="/intervencoes/plano-reforco?sheet={{ sheet }}">Atribuir</a>
         </div>
       </div>
     </div>
@@ -212,7 +212,7 @@ templates/home.html:
       <div class="card-body">
         <div class="card-subtitle"><strong>{{ acoes.acompanhamento }}</strong> alunos inativos</div>
         <div style="margin-top:12px;">
-          <button class="btn btn-warning" type="button">Enviar Alerta</button>
+          <a class="btn btn-warning" href="/intervencoes/acompanhamento?sheet={{ sheet }}">Enviar Alerta</a>
         </div>
       </div>
     </div>
@@ -224,7 +224,7 @@ templates/home.html:
       <div class="card-body">
         <div class="card-subtitle"><strong>{{ acoes.reuniao_pais }}</strong> alunos críticos</div>
         <div style="margin-top:12px;">
-          <button class="btn btn-success" type="button">Agendar</button>
+          <a class="btn btn-success" href="/intervencoes/reuniao-pais?sheet={{ sheet }}">Agendar</a>
         </div>
       </div>
     </div>
