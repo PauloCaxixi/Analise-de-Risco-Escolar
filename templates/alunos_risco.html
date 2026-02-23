@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Alunos{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Alunos - Lista Completa <span class="muted" style="font-size:14px; font-weight:800;">({{ sheet.replace("PEDE","") }})</span></h1>
+</div>
+
+<div class="table-card">
+  <div class="table-header">
+    <h2>Todos os alunos</h2>
+    <a class="btn btn-outline"
+       href="/export?sheet={{ sheet }}&escola={{ escola_nome }}&q={{ q | urlencode }}">
+      Exportar CSV (alto risco)
+    </a>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Aluno</th>
+        <th>Turma</th>
+        <th>Média</th>
+        <th>Risco</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in alunos %}
+      <tr>
+        <td>{{ a.nome }}</td>
+        <td>{{ a.turma }}</td>
+        <td class="media {{ a.media_classe }}">{{ a.media }}</td>
+        {% set risk_class = "risk-" + (a.risco | lower | replace(" ", "-")) %}
+        <td><span class="risk-tag {{ risk_class }}">{{ a.risco }}</span></td>
+        <td><a class="btn btn-outline" href="/aluno/{{ a.ra }}?sheet={{ sheet }}">Ver Detalhes</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

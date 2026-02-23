@@ -25,7 +25,7 @@ from src.features import standardize_columns as _standardize_columns
 from src.features import calc_media_disciplinas as _calc_media_disciplinas
 
 import pandas as pd
-from flask import Flask, abort, redirect, render_template, request, url_for
+from flask import Flask, abort, redirect, render_template, request, url_for, Response
 
 try:
     import joblib  # type: ignore
@@ -564,6 +564,63 @@ def dashboard() -> Any:
         q=q or "",
     )
 
+@app.get("/export")
+def export_relatorio() -> Response:
+    sheet = request.args.get("sheet", DEFAULT_SHEET)
+    if sheet not in AVAILABLE_SHEETS:
+        sheet = DEFAULT_SHEET
+
+    escola = request.args.get("escola") or "Todas"
+    q = request.args.get("q") or ""
+
+    df_raw = _read_xlsx_sheet(DATA_XLSX_PATH, sheet)
+    df_std = _standardize_columns(df_raw)
+    df_std = df_std.loc[:, ~df_std.columns.duplicated()].copy()
+
+    df_filtered = _apply_filters(df_std, None if escola == "Todas" else escola, q)
+
+    df = _standardize_columns(df_filtered)
+    df = df.loc[:, ~df.columns.duplicated()].copy()
+    df = _coerce_numeric(df, ["Matem", "Portug", "Inglês", "INDE 22"])
+
+    pre, model, metadata = _load_model_bundle()
+    if pre is not None and model is not None:
+        feature_cols = metadata.get("feature_columns")
+        if isinstance(feature_cols, list) and feature_cols:
+            score, risco = _predict_risk_with_model(df, pre, model, [str(c) for c in feature_cols])
+        else:
+            score, risco = _predict_risk_fallback(df)
+    else:
+        score, risco = _predict_risk_fallback(df)
+
+    df = df.assign(_risk_score=score, _risk_label=risco)
+    alto_mask = df["_risk_label"].isin(["Alto", "Muito Alto"])
+
+    df_out = df.loc[alto_mask].copy()
+    df_out["_media"] = df_out.apply(_calc_media_disciplinas, axis=1)
+
+    export_df = pd.DataFrame(
+        {
+            "RA": df_out.get("RA", pd.Series("", index=df_out.index)).astype(str).str.strip(),
+            "Aluno": df_out.get("Nome", pd.Series("", index=df_out.index)).astype(str).str.strip(),
+            "Turma": df_out.get("Turma", pd.Series("", index=df_out.index)).astype(str).str.strip(),
+            "Média": pd.to_numeric(df_out["_media"], errors="coerce").round(1),
+            "Risco": df_out["_risk_label"].astype(str),
+        }
+    )
+
+    # ordena por maior risco (score) e depois por média menor
+    export_df = export_df.sort_values(by=["Risco", "Média"], ascending=[True, True], na_position="last")
+
+    csv_text = export_df.to_csv(index=False, sep=";", lineterminator="\n")
+    csv_bytes = ("\ufeff" + csv_text).encode("utf-8")  # BOM p/ Excel
+
+    filename = f"relatorio_alto_risco_{sheet}.csv"
+    return Response(
+        csv_bytes,
+        mimetype="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 @app.get("/aluno/<ra>")
 def aluno_detalhe(ra: str) -> Any:
@@ -695,27 +752,82 @@ def aluno_detalhe(ra: str) -> Any:
     )
 
 
-# Rotas do menu (placeholders)
 @app.get("/alunos-risco")
 def alunos_risco() -> Any:
-    return redirect(url_for("dashboard"))
-
-@app.get("/api/tendencia")
-def api_tendencia() -> dict:
     sheet = request.args.get("sheet", DEFAULT_SHEET)
+    if sheet not in AVAILABLE_SHEETS:
+        sheet = DEFAULT_SHEET
+
+    escola = request.args.get("escola")
+    q = request.args.get("q")
 
     df_raw = _read_xlsx_sheet(DATA_XLSX_PATH, sheet)
     df_std = _standardize_columns(df_raw)
-    df_std = df_std.loc[:, ~df_std.columns.duplicated()].copy()  # anti-duplicadas
-    df = _coerce_numeric_all(df_std)
+    df_std = df_std.loc[:, ~df_std.columns.duplicated()].copy()
 
-    tendencia_media, tendencia_risco = calcular_tendencia(df)
+    escolas = _select_escolas(df_std)
+    if escola and escola != "Todas" and escola not in escolas:
+        escola = "Todas"
+    escola_nome = escola or (escolas[0] if escolas else "Todas")
 
-    return {
-        "labels": ["Pedra 20", "Pedra 21", "Pedra 22"],
-        "media": tendencia_media,
-        "risco": tendencia_risco,
-    }
+    df_filtered = _apply_filters(df_std, escola if escola_nome != "Todas" else None, q)
+
+    # Se ficar vazio por filtro, cai pra "Todas"
+    if df_filtered.empty and escola_nome != "Todas":
+        escola_nome = "Todas"
+        df_filtered = _apply_filters(df_std, None, q)
+
+    # gera risco e média por aluno
+    df = _standardize_columns(df_filtered)
+    df = df.loc[:, ~df.columns.duplicated()].copy()
+    df = _coerce_numeric(df, ["Matem", "Portug", "Inglês", "INDE 22"])
+
+    pre, model, metadata = _load_model_bundle()
+    if pre is not None and model is not None:
+        feature_cols = metadata.get("feature_columns")
+        if isinstance(feature_cols, list) and feature_cols:
+            score, risco = _predict_risk_with_model(df, pre, model, [str(c) for c in feature_cols])
+        else:
+            score, risco = _predict_risk_fallback(df)
+    else:
+        score, risco = _predict_risk_fallback(df)
+
+    df = df.assign(_risk_score=score, _risk_label=risco)
+    df["_media"] = df.apply(_calc_media_disciplinas, axis=1)
+    df["_media_classe"] = df["_media"].apply(_media_class)
+
+    rows: List[Dict[str, Any]] = []
+    for _, r in df.sort_values(by="_risk_score", ascending=False).iterrows():
+        ra = str(r.get("RA", "")).strip()
+        rows.append(
+            {
+                "ra": ra,
+                "nome": str(r.get("Nome", "")).strip(),
+                "turma": str(r.get("Turma", "")).strip(),
+                "media": (f"{float(r.get('_media')):.1f}".replace(".", ",") if pd.notna(r.get("_media")) else "-"),
+                "media_classe": str(r.get("_media_classe", "ok")),
+                "risco": str(r.get("_risk_label", "Regular")),
+            }
+        )
+
+    # badge / usuário
+    ctx_badge = _build_dashboard_context(df_filtered)
+    alertas_count = int(ctx_badge.get("alertas_count", 0))
+    usuario_nome = "Prof. Ana"
+    usuario_cargo = "Coordenadora Pedagógica"
+
+    return render_template(
+        "alunos_risco.html",
+        alertas_count=alertas_count,
+        escola_nome=escola_nome,
+        usuario_nome=usuario_nome,
+        usuario_cargo=usuario_cargo,
+        alunos=rows,
+        sheet=sheet,
+        available_sheets=AVAILABLE_SHEETS,
+        q=q or "",
+        escolas=escolas,
+    )
 
 
 @app.get("/alertas")

@@ -66,7 +66,9 @@ templates/home.html:
   <div class="table-card">
     <div class="table-header">
       <h2>Lista de <span class="highlight-danger">Alunos em Alto Risco</span></h2>
-      <button class="btn btn-danger" type="button">Exportar Relatório</button>
+      <a class="btn btn-danger" href="/export?sheet={{ sheet }}">
+        Exportar Relatório
+      </a>
     </div>
 
     <table class="data-table">
@@ -98,7 +100,9 @@ templates/home.html:
     </table>
 
     <div class="table-footer">
-      <a class="btn btn-outline" href="/alunos-risco">Ver Todos os Alunos ({{ indicadores.alto_risco.total }})</a>
+      <a class="btn btn-outline" href="/alunos-risco?sheet={{ sheet }}&escola=Todas&q=">
+        Ver Todos os Alunos ({{ indicadores.total }})
+      </a>
     </div>
   </div>
 
