@@ -42,7 +42,7 @@ except Exception:  # pragma: no cover
 # REPO_ROOT já foi definido no bootstrap (TECH_5/)
 BASE_DIR = REPO_ROOT  # raiz real do projeto
 
-DEFAULT_XLSX = BASE_DIR / "data" / "raw" / "BASE DE DADOS PEDE 2024 - DATATHON.xlsx"
+DEFAULT_XLSX = BASE_DIR / "dashboard" / "data" / "raw" / "BASE DE DADOS PEDE 2024 - DATATHON.xlsx"
 DATA_XLSX_PATH = Path(os.environ.get("PEDE_XLSX_PATH", str(DEFAULT_XLSX)))
 DEFAULT_SHEET = os.environ.get("PEDE_DEFAULT_SHEET", "PEDE2022")
 AVAILABLE_SHEETS = ["PEDE2022", "PEDE2023", "PEDE2024"]
@@ -703,6 +703,9 @@ def _load_df_with_risk(sheet: str, escola: Optional[str], q: Optional[str]) -> p
 
 @app.route("/intervencoes/plano-reforco", methods=["GET", "POST"])
 def intervencao_plano_reforco() -> Any:
+    msg = None 
+
+
     sheet = request.args.get("sheet", DEFAULT_SHEET)
     if sheet not in AVAILABLE_SHEETS:
         sheet = DEFAULT_SHEET
@@ -809,18 +812,26 @@ def intervencao_acompanhamento() -> Any:
     q = request.args.get("q")
 
     df = _load_df_with_risk(sheet, escola, q)
+    df = standardize_columns(df)   # ← CORREÇÃO ESSENCIAL
 
     criterios: List[pd.Series] = []
+
     if "Ativo/ Inativo" in df.columns:
         criterios.append(df["Ativo/ Inativo"].astype(str).str.casefold().str.contains("inativ", na=False))
+
     if "IEG" in df.columns:
         criterios.append(pd.to_numeric(df["IEG"], errors="coerce") < 0.4)
+
     if "IPS" in df.columns:
         criterios.append(pd.to_numeric(df["IPS"], errors="coerce") < 0.4)
-    if "Rec Psicologia" in df.columns:
-        criterios.append(df["Rec Psicologia"].astype(str).str.strip().replace({"nan": ""}) != "")
 
-    mask = pd.concat(criterios, axis=1).any(axis=1) if criterios else pd.Series(False, index=df.index)
+    if "Rec Psicologia" in df.columns:
+        criterios.append(df["Rec Psicologia"].astype(str).str.strip().fillna("") != "")
+
+    if criterios:
+        mask = pd.concat(criterios, axis=1).any(axis=1)
+    else:
+        mask = pd.Series(False, index=df.index)
 
     alvo = df[mask].copy().sort_values(by="_risk_score", ascending=False)
 
