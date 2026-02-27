@@ -23,6 +23,7 @@ from src.services.tendencia import calcular_tendencia
 from src.features import coerce_numeric as _coerce_numeric_all
 from src.features import standardize_columns as _standardize_columns
 from src.features import calc_media_disciplinas as _calc_media_disciplinas
+from src.features import standardize_columns 
 
 import pandas as pd
 from flask import Flask, abort, redirect, render_template, request, url_for, Response, flash, jsonify
@@ -73,7 +74,7 @@ TEMPLATES_DIR = str(REPO_ROOT / "templates")
 STATIC_DIR = str(REPO_ROOT / "static")
 
 app = Flask(__name__, template_folder=TEMPLATES_DIR, static_folder=STATIC_DIR)
-
+app.secret_key = "super_chave_ultra_secreta_123"
 
 # =========================
 # TYPES
@@ -812,27 +813,10 @@ def intervencao_acompanhamento() -> Any:
     q = request.args.get("q")
 
     df = _load_df_with_risk(sheet, escola, q)
-    df = standardize_columns(df)   # ← CORREÇÃO ESSENCIAL
+    df = standardize_columns(df)   # ← mantém a normalização
 
-    criterios: List[pd.Series] = []
-
-    if "Ativo/ Inativo" in df.columns:
-        criterios.append(df["Ativo/ Inativo"].astype(str).str.casefold().str.contains("inativ", na=False))
-
-    if "IEG" in df.columns:
-        criterios.append(pd.to_numeric(df["IEG"], errors="coerce") < 0.4)
-
-    if "IPS" in df.columns:
-        criterios.append(pd.to_numeric(df["IPS"], errors="coerce") < 0.4)
-
-    if "Rec Psicologia" in df.columns:
-        criterios.append(df["Rec Psicologia"].astype(str).str.strip().fillna("") != "")
-
-    if criterios:
-        mask = pd.concat(criterios, axis=1).any(axis=1)
-    else:
-        mask = pd.Series(False, index=df.index)
-
+    # NOVA REGRA: somente alunos em risco MUITO ALTO
+    mask = df["_risk_label"] == "Muito Alto"
     alvo = df[mask].copy().sort_values(by="_risk_score", ascending=False)
 
     alunos = [
@@ -857,7 +841,7 @@ def intervencao_acompanhamento() -> Any:
         sheet=sheet,
         available_sheets=AVAILABLE_SHEETS,
         escola_nome=escola or "Todas",
-        alertas_count=int((df["_risk_label"].isin(["Alto", "Muito Alto"])).sum()),
+        alertas_count=int((df["_risk_label"] == "Muito Alto").sum()),  # ← CORRIGIDO
         usuario_nome="Prof. Ana",
         usuario_cargo="Coordenadora Pedagógica",
     )

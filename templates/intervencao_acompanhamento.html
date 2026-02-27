@@ -1,11 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Acompanhamento{% endblock %}
-{% block content %}
 
-<div class="page-header">
-  <h1>Intervenção - Acompanhamento</h1>
-  <div class="muted" style="font-weight:800;">Critério: inativo OU IEG/IPS baixos OU Rec Psicologia preenchido</div>
+{% block back_button %}
+<div class="page-header-flex">
+    <div class="page-header-left">
+        <h1 class="page-title">Intervenção - Acompanhamento</h1>
+        <div class="page-subtitle">
+            Critério: alunos com Risco Muito Alto (casos críticos)
+        </div>
+    </div>
+
+    <a class="btn-back" href="{{ request.referrer or '/' }}">← Voltar</a>
 </div>
+{% endblock %}
+
+{% block content %}
 
 <div class="table-card">
   <div class="table-header">

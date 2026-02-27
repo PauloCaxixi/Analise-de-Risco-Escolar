@@ -1,5 +1,11 @@
-templates/aluno_detalhe.html:
 {% extends "base.html" %}
+
+{% block back_button %}
+<div class="page-header-flex">
+    <h1 class="page-title">{{ self.title() }}</h1>
+    <a class="btn-back" href="{{ request.referrer or '/' }}">← Voltar</a>
+</div>
+{% endblock %}
 
 {% block title %}Detalhes do Aluno{% endblock %}
 
@@ -10,10 +16,6 @@ templates/aluno_detalhe.html:
     <div style="margin-top:6px; color:#64748b; font-weight:700;">
       Aluno: <strong>{{ aluno.nome }}</strong> • Turma: <strong>{{ aluno.turma }}</strong> • RA: <strong>{{ aluno.ra }}</strong>
     </div>
-  </div>
-
-  <div style="display:flex; gap:10px;">
-    <a class="btn btn-outline" href="/dashboard">Voltar ao Dashboard</a>
   </div>
 </div>
 

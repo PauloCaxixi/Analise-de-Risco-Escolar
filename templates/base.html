@@ -1,4 +1,3 @@
-templates/base.html:
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -145,6 +144,7 @@ templates/base.html:
 
       <!-- ===== CONTEÚDO DINÂMICO ===== -->
       <section class="content">
+        {% block back_button %}{% endblock %}
         {% with messages = get_flashed_messages() %}
           {% if messages %}
             <div class="card" style="margin:14px 0; padding:14px 16px; border-left:6px solid #22c55e;">

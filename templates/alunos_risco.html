@@ -1,4 +1,12 @@
 {% extends "base.html" %}
+
+{% block back_button %}
+<div class="page-header-flex">
+    <h1 class="page-title">{{ self.title() }}</h1>
+    <a class="btn-back" href="{{ request.referrer or '/' }}">← Voltar</a>
+</div>
+{% endblock %}
+
 {% block title %}Alunos{% endblock %}
 
 {% block content %}

@@ -1,14 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Plano de Reforço{% endblock %}
-{% block content %}
 
-<div class="page-header">
-  <h1>Intervenção - Plano de Reforço</h1>
-  <div class="muted" style="font-weight:800;">
-    Critério: Risco Alto/Muito Alto + sem recuperação registrada (Rec Av1..4 vazios) + não confirmado ainda
-  </div>
+{% block back_button %}
+<div class="page-header-flex">
+    <div class="page-header-left">
+        <h1 class="page-title">Intervenção - Plano de Reforço</h1>
+        <div class="page-subtitle">
+            Critério: Risco Alto/Muito Alto + sem recuperação registrada (Rec Av1..4 vazios) + não confirmado ainda
+        </div>
+    </div>
+
+    <a class="btn-back" href="{{ request.referrer or '/' }}">← Voltar</a>
 </div>
+{% endblock %}
 
+{% block content %}
 <div class="card" style="margin:14px 0;">
   <div class="card-header">
     <h3>Confirmar Plano de Reforço</h3>

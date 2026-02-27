@@ -1,11 +1,18 @@
 {% extends "base.html" %}
-{% block title %}Reuniões de Pais{% endblock %}
-{% block content %}
 
-<div class="page-header">
-  <h1>Intervenção - Reuniões de Pais</h1>
-  <div class="muted" style="font-weight:800;">Critério: Alto/Muito Alto e Indicado marcado</div>
+{% block back_button %}
+<div class="page-header-flex">
+    <div class="page-header-left">
+        <h1 class="page-title">Intervenção - Reuniões de Pais</h1>
+        <div class="page-subtitle">
+            Critério: Alto/Muito Alto e Indicado marcado
+        </div>
+    </div>
+
+    <a class="btn-back" href="{{ request.referrer or '/' }}">← Voltar</a>
 </div>
+{% endblock %}
+{% block content %}
 
 <div class="table-card">
   <div class="table-header" style="align-items:flex-end;">
