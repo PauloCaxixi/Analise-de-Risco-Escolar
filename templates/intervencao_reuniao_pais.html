@@ -9,7 +9,7 @@
         </div>
     </div>
 
-    <a class="btn-back" href="{{ request.referrer or '/' }}">← Voltar</a>
+    <a class="btn-back" href="{{ session.get('last_page', '/') }}">← Voltar</a>
 </div>
 {% endblock %}
 {% block content %}

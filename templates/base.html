@@ -12,6 +12,82 @@
   <link href="https://unpkg.com/feather-icons/dist/feather.css" rel="stylesheet">
 </head>
 
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+
+    const input = document.getElementById("global-search");
+    const resultBoxId = "live-search-results";
+
+    if (!input) return;
+
+    // cria box de resultados
+    let box = document.createElement("div");
+    box.id = resultBoxId;
+    box.style.position = "absolute";
+    box.style.background = "white";
+    box.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+    box.style.borderRadius = "8px";
+    box.style.padding = "10px";
+    box.style.display = "none";
+    box.style.zIndex = "9999";
+    input.parentElement.appendChild(box);
+
+    // evento de digitação
+    input.addEventListener("input", function() {
+        let q = input.value.trim();
+
+        if (q.length < 2) {
+            box.style.display = "none";
+            return;
+        }
+
+        fetch(`/api/search?sheet=${document.querySelector("select[name='sheet']").value}&q=` + encodeURIComponent(q))
+            .then(r => r.json())
+            .then(data => {
+                box.innerHTML = "";
+
+                if (data.results.length === 0) {
+                    box.style.display = "none";
+                    return;
+                }
+
+                data.results.forEach(r => {
+                    let item = document.createElement("div");
+                    item.style.padding = "6px 8px";
+                    item.style.cursor = "pointer";
+                    item.style.borderBottom = "1px solid #f0f0f0";
+
+                    item.innerHTML = `
+                        <strong>${r.nome}</strong> — ${r.turma} <br>
+                        <span style="font-size:12px;color:#888;">RA: ${r.ra} | Risco: ${r.risco}</span>
+                    `;
+
+                    item.onclick = function() {
+                        window.location.href = `/aluno/${r.ra}?sheet=${document.querySelector("select[name='sheet']").value}`;
+                    };
+
+                    box.appendChild(item);
+                });
+
+                // posicionar a caixa
+                let rect = input.getBoundingClientRect();
+                box.style.width = rect.width + "px";
+                box.style.top = (input.offsetTop + input.offsetHeight + 5) + "px";
+                box.style.left = input.offsetLeft + "px";
+                box.style.display = "block";
+            });
+    });
+
+    // fechar ao clicar fora
+    document.addEventListener("click", function(e) {
+        if (!input.contains(e.target))
+            box.style.display = "none";
+    });
+
+});
+</script>
+
 <body>
   <div class="layout">
 

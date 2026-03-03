@@ -10,10 +10,6 @@ venv/
 # Jupyter
 .ipynb_checkpoints/
 
-# Data
-data/raw/*.xlsx
-data/raw/*.csv
-
 # Models
 app/model/*.joblib
 app/model/*.pkl

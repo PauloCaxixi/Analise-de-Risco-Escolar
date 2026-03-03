@@ -23,10 +23,10 @@ from src.services.tendencia import calcular_tendencia
 from src.features import coerce_numeric as _coerce_numeric_all
 from src.features import standardize_columns as _standardize_columns
 from src.features import calc_media_disciplinas as _calc_media_disciplinas
-from src.features import standardize_columns 
+
 
 import pandas as pd
-from flask import Flask, abort, redirect, render_template, request, url_for, Response, flash, jsonify
+from flask import Flask, abort, ctx, redirect, render_template, request, session, url_for, Response, flash, jsonify
 
 try:
     import joblib  # type: ignore
@@ -92,10 +92,6 @@ class AlunoRow:
 # =========================
 # IO + NORMALIZATION
 # =========================
-# =========================
-# IO + NORMALIZATION
-# =========================
-
 
 def _read_xlsx_sheet(xlsx_path: Path, sheet_name: str) -> pd.DataFrame:
     if not xlsx_path.exists():
@@ -252,6 +248,54 @@ def _predict_risk_fallback(df: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
 
     label = inde_f.apply(to_label_from_inde)
     return score, label
+
+def detectar_alunos_sem_progresso(df_2022, df_2023, df_2024, anos=2):
+    merged = pd.concat([
+        df_2022.assign(ano=2022).reset_index(drop=True),
+        df_2023.assign(ano=2023).reset_index(drop=True),
+        df_2024.assign(ano=2024).reset_index(drop=True),
+    ], ignore_index=True)
+
+    resultados = []
+    for ra, grupo in merged.groupby("RA"):
+        grupo = grupo.sort_values("ano")
+
+        pedras = grupo[["Pedra 20", "Pedra 21", "Pedra 22"]].fillna(0).values
+        inde = grupo["INDE 22"].fillna(0).values
+
+        # progresso ocorre se valor do ano seguinte for maior
+        progresso_pedras = (pedras[1:] > pedras[:-1]).any(axis=1)
+        progresso_inde = inde[1:] > inde[:-1]
+
+        progresso_total = progresso_pedras | progresso_inde
+
+        if (~progresso_total).sum() >= anos:
+            resultados.append(ra)
+
+    return resultados
+
+def recomendar_proxima_fase(df_2022, df_2023, df_2024):
+    merged = pd.concat([
+        df_2022.assign(ano=2022).reset_index(drop=True),
+        df_2023.assign(ano=2023).reset_index(drop=True),
+        df_2024.assign(ano=2024).reset_index(drop=True),
+    ], ignore_index=True)
+
+    recomendados = []
+
+    for ra, grupo in merged.groupby("RA"):
+        grupo = grupo.sort_values("ano")
+
+        inde = grupo["INDE 22"].fillna(0).values
+        riscos = grupo["_risk_label"].values
+
+        melhorou_inde = (inde[-1] > inde[0])
+        risco_ok = riscos[-1] in ["Regular", "Médio"]
+
+        if melhorou_inde and risco_ok:
+            recomendados.append(ra)
+
+    return recomendados
 
 # =========================
 # BUSINESS LOGIC (DASH)
@@ -542,9 +586,25 @@ def dashboard() -> Any:
 
     ctx = _build_dashboard_context(df_filtered)
 
+    # --- Recomendações: sem progresso e próxima fase ---
+    # carregar anos com exatamente o mesmo pipeline do sistema
+    df2022 = _load_df_with_risk("PEDE2022", None, None).reset_index(drop=True)
+    df2023 = _load_df_with_risk("PEDE2023", None, None).reset_index(drop=True)
+    df2024 = _load_df_with_risk("PEDE2024", None, None).reset_index(drop=True)
+
+    ctx["acoes"]["sem_progresso"] = len(detectar_alunos_sem_progresso(df2022, df2023, df2024))
+    ctx["acoes"]["proxima_fase"] = len(recomendar_proxima_fase(df2022, df2023, df2024))
+
+    ctx["acoes"]["sem_progresso"] = len(
+        detectar_alunos_sem_progresso(df2022, df2023, df2024)
+    )
+
+    ctx["acoes"]["proxima_fase"] = len(
+        recomendar_proxima_fase(df2022, df2023, df2024)
+    )
     # User info (placeholder controlado por servidor)
-    usuario_nome = "Prof. Ana"
-    usuario_cargo = "Coordenadora Pedagógica"
+    usuario_nome = session.get("usuario_nome", "Usuário")
+    usuario_cargo = session.get("usuario_cargo", "Cargo")
 
     return render_template(
         "home.html",
@@ -704,6 +764,8 @@ def _load_df_with_risk(sheet: str, escola: Optional[str], q: Optional[str]) -> p
 
 @app.route("/intervencoes/plano-reforco", methods=["GET", "POST"])
 def intervencao_plano_reforco() -> Any:
+    # salvar rota anterior para o botão voltar
+    session["last_page"] = request.url
     msg = None 
 
 
@@ -805,6 +867,9 @@ def intervencao_plano_reforco() -> Any:
 
 @app.route("/intervencoes/acompanhamento", methods=["GET", "POST"])
 def intervencao_acompanhamento() -> Any:
+    # salvar rota anterior para o botão voltar
+    session["last_page"] = request.url
+
     sheet = request.args.get("sheet", DEFAULT_SHEET)
     if sheet not in AVAILABLE_SHEETS:
         sheet = DEFAULT_SHEET
@@ -813,7 +878,7 @@ def intervencao_acompanhamento() -> Any:
     q = request.args.get("q")
 
     df = _load_df_with_risk(sheet, escola, q)
-    df = standardize_columns(df)   # ← mantém a normalização
+    df = _standardize_columns(df)   # ← mantém a normalização
 
     # NOVA REGRA: somente alunos em risco MUITO ALTO
     mask = df["_risk_label"] == "Muito Alto"
@@ -849,6 +914,9 @@ def intervencao_acompanhamento() -> Any:
 
 @app.route("/intervencoes/reuniao-pais", methods=["GET", "POST"])
 def intervencao_reuniao_pais() -> Any:
+    # salvar rota anterior para o botão voltar
+    session["last_page"] = request.url
+
     sheet = request.args.get("sheet", DEFAULT_SHEET)
     if sheet not in AVAILABLE_SHEETS:
         sheet = DEFAULT_SHEET
@@ -1065,8 +1133,8 @@ def aluno_detalhe(ra: str) -> Any:
     alertas_count = int(ctx_badge.get("alertas_count", 0))
 
     # User info (placeholder controlado por servidor)
-    usuario_nome = "Prof. Ana"
-    usuario_cargo = "Coordenadora Pedagógica"
+    usuario_nome = session.get("usuario_nome", "Usuário")
+    usuario_cargo = session.get("usuario_cargo", "Cargo")
 
     return render_template(
         "aluno_detalhe.html",
@@ -1078,6 +1146,39 @@ def aluno_detalhe(ra: str) -> Any:
         recomendacoes=recomendacoes,
     )
 
+
+@app.get("/api/search")
+def api_search() -> Any:
+    sheet = request.args.get("sheet", DEFAULT_SHEET)
+    q = request.args.get("q", "").strip()
+
+    if not q:
+        return {"results": []}
+
+    df_raw = _read_xlsx_sheet(DATA_XLSX_PATH, sheet)
+    df = _standardize_columns(df_raw)
+    df = df.loc[:, ~df.columns.duplicated()]
+
+    # Filtra alunos por RA, nome ou turma
+    mask = (
+        df["RA"].astype(str).str.contains(q, case=False, na=False)
+        | df.get("Nome", "").astype(str).str.contains(q, case=False, na=False)
+        | df.get("Turma", "").astype(str).str.contains(q, case=False, na=False)
+    )
+
+    results = df[mask].head(20)
+
+    output = [
+        {
+            "ra": str(r["RA"]),
+            "nome": r.get("Nome", ""),
+            "turma": r.get("Turma", ""),
+            "risco": r.get("_risk_label", "Regular"),
+        }
+        for _, r in results.iterrows()
+    ]
+
+    return {"results": output}
 
 @app.get("/alunos-risco")
 def alunos_risco() -> Any:
@@ -1140,8 +1241,8 @@ def alunos_risco() -> Any:
     # badge / usuário
     ctx_badge = _build_dashboard_context(df_filtered)
     alertas_count = int(ctx_badge.get("alertas_count", 0))
-    usuario_nome = "Prof. Ana"
-    usuario_cargo = "Coordenadora Pedagógica"
+    usuario_nome = session.get("usuario_nome", "Usuário")
+    usuario_cargo = session.get("usuario_cargo", "Cargo")
 
     return render_template(
         "alunos_risco.html",
