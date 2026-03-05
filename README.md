@@ -221,9 +221,9 @@ O sistema lê o caminho da planilha através de variáveis de ambiente:
 
 ```powershell
 # Windows
-$env:PEDE_XLSX_PATH="C:\dados\BASE DE DADOS PEDE 2024 - DATATHON.xlsx"
+$env:PEDE_XLSX_PATH="dashboard\data\raw\BASE DE DADOS PEDE 2024 - DATATHON.xlsx"
 # Linux/Mac
-export PEDE_XLSX_PATH="/dados/BASE DE DADOS PEDE 2024 - DATATHON.xlsx"
+export PEDE_XLSX_PATH="dashboard/data/raw/BASE DE DADOS PEDE 2024 - DATATHON.xlsx
 
 ```
 
@@ -232,7 +232,7 @@ export PEDE_XLSX_PATH="/dados/BASE DE DADOS PEDE 2024 - DATATHON.xlsx"
 Para que o Dashboard use Machine Learning em vez da heurística:
 
 ```bash
-python -m src.train --xlsx "caminho_da_base.xlsx" --out "app/model"
+python -m src.train --xlsx "BASE DE DADOS PEDE 2024 - DATATHON.xlsx" --out "dashboard\data\raw"
 
 ```
 
@@ -273,7 +273,7 @@ Para rodar em container, utilize o `Dockerfile` incluso:
 
 ```bash
 docker build -t pm-dash .
-docker run -p 5000:5000 -e PEDE_XLSX_PATH="/app/data.xlsx" -v /caminho/local.xlsx:/app/data.xlsx pm-dash
+docker run -p 5000:5000 -e PEDE_XLSX_PATH="dashboard/data/raw/BASE DE DADOS PEDE 2024 - DATATHON.xlsx" -v /caminho/local.xlsx:/app/data.xlsx pm-dash
 
 ```
 

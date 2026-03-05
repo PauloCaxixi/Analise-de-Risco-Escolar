@@ -25,7 +25,11 @@ PROJECT_DIR = Path(__file__).resolve().parents[1]  # .../Analise-de-Risco-Escola
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
-from src.features import standardize_columns, calc_media_disciplinas
+from src.features import (
+    standardize_columns,
+    calc_media_disciplinas,
+    coerce_numeric
+)
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]   # Analise-de-Risco-Escolar
 DATA_PATH = PROJECT_DIR / "dashboard" / "data" / "raw" / "BASE DE DADOS PEDE 2024 - DATATHON.xlsx"
@@ -36,10 +40,17 @@ def load_sheet(sheet_name: str):
     # Normaliza colunas
     df = standardize_columns(df)
 
+    # Extrai ano da aba (PEDE2022 → 2022)
+    try:
+        year = int(sheet_name.replace("PEDE", ""))
+        df["ano"] = year
+    except:
+        df["ano"] = 0
+
     # Remove colunas duplicadas
     df = df.loc[:, ~df.columns.duplicated()]
 
-    # Reseta índice e remove duplicados de índice
+    # Reseta índice
     df = df.reset_index(drop=True)
 
     return df
@@ -51,6 +62,9 @@ df2024 = load_sheet("PEDE2024")
 
 # Concatenar SEM ERRO
 df = pd.concat([df2022, df2023, df2024], ignore_index=True)
+
+# 🔧 converte colunas numéricas corretamente
+df = coerce_numeric(df)
 
 # 2) Criar média das disciplinas
 df["_media"] = df.apply(calc_media_disciplinas, axis=1)
