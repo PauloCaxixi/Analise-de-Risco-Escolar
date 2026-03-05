@@ -6,6 +6,10 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+import numpy as np
+
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
 
 # =========================
 # PROJECT ROOT BOOTSTRAP
@@ -180,6 +184,16 @@ def _predict_risk_with_model(
     try:
         proba = model.predict_proba(x_t)[:, 1]
         score = pd.Series(proba, index=df.index, dtype="float64")
+
+        def to_label_future(p):
+            if p >= 0.70:
+                return "Alta Defasagem"
+            if p >= 0.40:
+                return "Risco Moderado"
+            return "Baixo Risco"
+
+        label = pd.Series([to_label_future(p) for p in proba], index=df.index)
+        return score, label
     except Exception:
         yhat = model.predict(x_t)
         yhat_s = pd.Series(pd.to_numeric(yhat, errors="coerce"), index=df.index, dtype="float64")
@@ -297,6 +311,86 @@ def recomendar_proxima_fase(df_2022, df_2023, df_2024):
 
     return recomendados
 
+
+def gerar_recomendacao_ia(row: pd.Series, progresso: Optional[str] = None) -> str:
+    """
+    IA interna que gera recomendações automáticas sem precisar de modelo externo.
+    Analisa risco, notas, pedras, inde, defasagens e comportamento histórico.
+    """
+
+    nome = str(row.get("Nome", "O aluno"))
+    risco = str(row.get("_risk_label", "Regular"))
+    inde = float(row.get("INDE 22")) if pd.notna(row.get("INDE 22")) else None
+    media = float(row.get("_media")) if pd.notna(row.get("_media")) else None
+
+    pedra20 = row.get("Pedra 20")
+    pedra21 = row.get("Pedra 21")
+    pedra22 = row.get("Pedra 22")
+
+    rec_psic = str(row.get("Rec Psicologia", "")).strip()
+    indicado = bool(str(row.get("Indicado", "")).strip())
+
+    textos = []
+
+    # ——— risco ———
+    if risco == "Muito Alto":
+        textos.append(
+            f"{nome} apresenta risco MUITO ALTO de reprovação. Recomenda-se intervenção imediata, acompanhamento semanal e contato com responsáveis."
+        )
+    elif risco == "Alto":
+        textos.append(
+            f"{nome} demonstra risco ALTO. É importante reforço contínuo e monitoramento quinzenal."
+        )
+    elif risco == "Médio":
+        textos.append(
+            f"{nome} possui risco MÉDIO. Um reforço leve e estímulo ao estudo podem ajudar."
+        )
+    else:
+        textos.append(
+            f"{nome} apresenta risco regular, com bom potencial de evolução."
+        )
+
+    # ——— INDE ———
+    if inde is not None:
+        if inde < 4:
+            textos.append("O INDE é muito baixo, indicando forte defasagem geral de aprendizagem.")
+        elif inde < 6:
+            textos.append("O INDE está abaixo do ideal, sugerindo foco em leitura e matemática.")
+        elif inde > 7.5:
+            textos.append("O INDE é elevado, sugerindo boa compreensão geral.")
+
+    # ——— Média geral ———
+    if media is not None:
+        if media < 5:
+            textos.append("A média geral é crítica. Reforço intensivo recomendado.")
+        elif media < 6:
+            textos.append("A média está abaixo da linha de suficiência. Atenção às dificuldades.")
+        elif media > 7.5:
+            textos.append("A média é excelente, demonstrando bom desempenho.")
+
+    # ——— Pedras (defasagens específicas) ———
+    for p, valor in zip(["Pedra 20", "Pedra 21", "Pedra 22"], [pedra20, pedra21, pedra22]):
+        if pd.notna(valor):
+            if valor <= 2:
+                textos.append(f"{nome} possui nível MUITO BAIXO em {p}, indicando forte defasagem.")
+            elif valor == 3:
+                textos.append(f"{p} apresenta nível intermediário, sugerindo necessidade de reforço.")
+            elif valor >= 4:
+                textos.append(f"{p} indica bom domínio do conteúdo.")
+
+    # ——— Indicações humanas ———
+    if rec_psic:
+        textos.append("Há registro de recuperação com psicologia. Acompanhar aspectos socioemocionais.")
+
+    if indicado:
+        textos.append("Aluno foi indicado pela equipe. Recomenda-se atenção especial.")
+
+    # ——— Progresso ———
+    if progresso:
+        textos.append(progresso)
+
+    return " ".join(textos)
+
 # =========================
 # BUSINESS LOGIC (DASH)
 # =========================
@@ -344,26 +438,54 @@ def _apply_filters(df: pd.DataFrame, escola: Optional[str], q: Optional[str]) ->
 
     return out
 
+def gerar_diagnostico_ia(row: pd.Series, progresso: str = "") -> str:
+    """Gera um parecer pedagógico baseado nos dados reais da linha do DataFrame."""
+    # Coleta dados com fallback para evitar erros de campo vazio
+    nome = str(row.get("Nome", "Aluno")).strip()
+    ida = row.get("IDA", 0.0)
+    ieg = row.get("IEG", 0.0)
+    risco = str(row.get("_risk_label", "Regular"))
+    
+    # Identifica a última 'Pedra' disponível
+    pedra = "-"
+    for p in ["Pedra 22", "Pedra 21", "Pedra 20"]:
+        if pd.notna(row.get(p)):
+            pedra = str(row.get(p))
+            break
+
+    # Monta o parecer técnico
+    parecer = f"Diagnóstico para {nome}: O aluno apresenta nível atual '{pedra}' com risco classificado como {risco}. "
+    parecer += f"Seu engajamento (IEG) está em {ieg:.2f} e o desempenho acadêmico (IDA) em {ida:.2f}. "
+    parecer += f"Análise de Evolução: {progresso}"
+    
+    return parecer
 
 def _build_dashboard_context(df_raw: pd.DataFrame) -> Dict[str, Any]:
+    # 1. Padronização e Limpeza
     df = _standardize_columns(df_raw)
     df = df.loc[:, ~df.columns.duplicated()].copy()
-    df = _coerce_numeric(df, ["Matem", "Portug", "Inglês", "INDE 22", "Pedra 20", "Pedra 21", "Pedra 22", "IEG", "IPS"])
+    
+    # Coerção numérica das colunas vitais para o dashboard e modelo
+    cols_to_fix = ["Matem", "Portug", "Inglês", "INDE 22", "Pedra 20", "Pedra 21", "Pedra 22", "IEG", "IPS"]
+    df = _coerce_numeric(df, cols_to_fix)
 
+    # 2. Predição de Risco com Proteção contra Erros de Tipo (Crash Fix)
     pre, model, metadata = _load_model_bundle()
-
-    if pre is not None and model is not None:
-        feature_cols = metadata.get("feature_columns")
-        if not isinstance(feature_cols, list) or not feature_cols:
-            # feature columns não declaradas => fallback
-            score, risco = _predict_risk_fallback(df)
+    
+    try:
+        if pre is not None and model is not None:
+            feature_cols = metadata.get("feature_columns", [])
+            score, risco = _predict_risk_with_model(df, pre, model, feature_cols=feature_cols)
         else:
-            score, risco = _predict_risk_with_model(df, pre, model, [str(c) for c in feature_cols])
-    else:
+            score, risco = _predict_risk_fallback(df)
+    except Exception as e:
+        # Removido o emoji que causava UnicodeEncodeError no Windows
+        print(f"Erro na predicao do modelo: {str(e)}. Usando logica de fallback.")
         score, risco = _predict_risk_fallback(df)
 
     df = df.assign(_risk_score=score, _risk_label=risco)
 
+    # 3. Tratamento de DF Vazio
     total = int(len(df))
     if total <= 0:
         return {
@@ -376,7 +498,7 @@ def _build_dashboard_context(df_raw: pd.DataFrame) -> Dict[str, Any]:
             "alunos_alto_risco": [],
             "disciplinas": {"matematica": 0, "portugues": 0, "ingles": 0},
             "tendencia": {"media": json.dumps([0.0, 0.0, 0.0]), "risco": json.dumps([0, 0, 0])},
-            "acoes": {"plano_reforco": 0, "acompanhamento": 0, "reuniao_pais": 0},
+            "acoes": {"acompanhamento": 0, "reuniao_pais": 0, "sem_progresso": 0, "proxima_fase": 0},
             "proximos_prazos": [
                 {"titulo": "Provas de Recuperação", "data": "A definir"},
                 {"titulo": "Reuniões de Pais", "data": "A definir"},
@@ -386,6 +508,7 @@ def _build_dashboard_context(df_raw: pd.DataFrame) -> Dict[str, Any]:
             "media_geral": "0,0",
         }
 
+    # 4. Cálculo de Indicadores
     alto_mask = df["_risk_label"].isin(["Alto", "Muito Alto"])
     medio_mask = df["_risk_label"].isin(["Médio"])
     reg_mask = df["_risk_label"].isin(["Regular"])
@@ -397,7 +520,7 @@ def _build_dashboard_context(df_raw: pd.DataFrame) -> Dict[str, Any]:
     def pct(n: int) -> int:
         return int(round((n / total) * 100, 0)) if total else 0
 
-    # Média geral (preferencialmente INDE 22)
+    # Média geral (prioriza INDE 22)
     if "INDE 22" in df.columns and df["INDE 22"].notna().any():
         media_geral = float(df["INDE 22"].mean(skipna=True))
     else:
@@ -406,49 +529,27 @@ def _build_dashboard_context(df_raw: pd.DataFrame) -> Dict[str, Any]:
 
     media_geral_display = f"{media_geral:.1f}".replace(".", ",")
 
-    # Tabela de alto risco
+    # 5. Tabela de Alunos em Destaque (Risco)
     table_df = df.loc[alto_mask].copy()
     table_df["_media"] = table_df.apply(_calc_media_disciplinas, axis=1)
     table_df["_media_classe"] = table_df["_media"].apply(_media_class)
 
-    alunos_alto: List[AlunoRow] = []
-    for _, r in table_df.sort_values(by="_risk_score", ascending=False).head(15).iterrows():
-        ra = str(r.get("RA", "")).strip()
-        nome = str(r.get("Nome", "")).strip()
-        turma = str(r.get("Turma", "")).strip()
-        media = float(r.get("_media")) if pd.notna(r.get("_media")) else float("nan")
-        media_fmt = f"{media:.1f}".replace(".", ",") if pd.notna(media) else "-"
-        alunos_alto.append(
-            AlunoRow(
-                ra=ra,
-                nome=nome,
-                turma=turma,
-                media=float(media) if pd.notna(media) else float("nan"),
-                media_classe=str(r.get("_media_classe", "ok")),
-                risco=str(r.get("_risk_label", "Médio")),
-            )
-        )
-
-    # Converte para formato do template
     alunos_alto_risco_payload: List[Dict[str, Any]] = []
-    for a in alunos_alto:
-        alunos_alto_risco_payload.append(
-            {
-                "ra": a.ra,
-                "nome": a.nome,
-                "turma": a.turma,
-                "media": (f"{a.media:.1f}".replace(".", ",") if pd.notna(a.media) else "-"),
-                "media_classe": a.media_classe,
-                "risco": a.risco,
-            }
-        )
+    for _, r in table_df.sort_values(by="_risk_score", ascending=False).head(15).iterrows():
+        media_val = float(r.get("_media")) if pd.notna(r.get("_media")) else float("nan")
+        alunos_alto_risco_payload.append({
+            "ra": str(r.get("RA", "")).strip(),
+            "nome": str(r.get("Nome", "")).strip(),
+            "turma": str(r.get("Turma", "")).strip(),
+            "media": (f"{media_val:.1f}".replace(".", ",") if pd.notna(media_val) else "-"),
+            "media_classe": str(r.get("_media_classe", "ok")),
+            "risco": str(r.get("_risk_label", "Médio")),
+        })
 
-    # Filtrar por disciplina (nota < 6)
+    # 6. Disciplinas com Defasagem (Nota < 6)
     def count_below(col: str) -> int:
-        if col not in df.columns:
-            return 0
-        s = pd.to_numeric(df[col], errors="coerce")
-        return int((s < 6.0).sum())
+        if col not in df.columns: return 0
+        return int((pd.to_numeric(df[col], errors="coerce") < 6.0).sum())
 
     disciplinas = {
         "matematica": count_below("Matem"),
@@ -456,17 +557,15 @@ def _build_dashboard_context(df_raw: pd.DataFrame) -> Dict[str, Any]:
         "ingles": count_below("Inglês"),
     }
 
-    # Tendência (Pedra 20/21/22)
+    # 7. Tendência Histórica (Pedras)
     pedra_cols = ["Pedra 20", "Pedra 21", "Pedra 22"]
-    media_series: List[float] = []
-    risco_series: List[int] = []
+    media_series, risco_series = [], []
 
     for c in pedra_cols:
         if c in df.columns:
-            s = pd.to_numeric(df[c], errors="coerce")
-            media_series.append(float(s.mean(skipna=True)) if s.notna().any() else 0.0)
-            # Risco por "pedra": aproximação (pedra baixa => risco)
-            risco_series.append(int((s <= 2).sum()))
+            vals = pd.to_numeric(df[c], errors="coerce")
+            media_series.append(float(vals.mean(skipna=True)) if vals.notna().any() else 0.0)
+            risco_series.append(int((vals <= 2).sum()))
         else:
             media_series.append(0.0)
             risco_series.append(0)
@@ -476,75 +575,48 @@ def _build_dashboard_context(df_raw: pd.DataFrame) -> Dict[str, Any]:
         "risco": json.dumps(risco_series),
     }
 
-    # Ações recomendadas
-    # 8.1 Plano de Reforço: alunos alto risco sem recuperação (Rec Av1..4 vazios)
+    # 8. Ações Recomendadas (Lógica de Intervenção)
+    # Reforço: Risco alto e sem notas de recuperação preenchidas
     rec_cols = [c for c in ["Rec Av1", "Rec Av2", "Rec Av3", "Rec Av4"] if c in df.columns]
     if rec_cols:
-        rec_any = df[rec_cols].astype(str).apply(lambda x: x.str.strip().replace({"nan": ""}), axis=0).agg(lambda col: col != "")
-        # rec_any acima não é correto; vamos fazer linha a linha:
-        rec_filled = df[rec_cols].astype(str).apply(lambda x: x.str.strip(), axis=1)
-        rec_present = rec_filled.apply(lambda row: any((v and v.casefold() != "nan") for v in row.tolist()), axis=1)
-        plano_reforco = int((alto_mask & (~rec_present)).sum())
+        rec_filled = df[rec_cols].astype(str).apply(lambda row: any(v.strip().lower() not in ["", "nan"] for v in row), axis=1)
+        plano_reforco = int((alto_mask & (~rec_filled)).sum())
     else:
         plano_reforco = 0
 
-    # 8.2 Acompanhamento: "inativos" (critério OR)
-    criterios: List[pd.Series] = []
-    if "Ativo/ Inativo" in df.columns:
-        criterios.append(df["Ativo/ Inativo"].astype(str).str.casefold().str.contains("inativ", na=False))
-    if "IEG" in df.columns:
-        criterios.append(pd.to_numeric(df["IEG"], errors="coerce") < 0.4)
-    if "IPS" in df.columns:
-        criterios.append(pd.to_numeric(df["IPS"], errors="coerce") < 0.4)
-    if "Rec Psicologia" in df.columns:
-        criterios.append(df["Rec Psicologia"].astype(str).str.strip().replace({"nan": ""}) != "")
-
-    if criterios:
-        acompanhamento = int(pd.concat(criterios, axis=1).any(axis=1).sum())
-    else:
-        acompanhamento = 0
-
-    # 8.3 Reuniões de Pais: aluno alto risco e Indicado marcado
-    if "Indicado" in df.columns:
-        indicado_mask = df["Indicado"].apply(_truthy)
-        reuniao_pais = int((alto_mask & indicado_mask).sum())
-    else:
-        reuniao_pais = 0
+    # Acompanhamento: Inativos ou baixo engajamento/psicossocial
+    crit_inativo = df["Ativo/ Inativo"].astype(str).str.lower().str.contains("inativ", na=False) if "Ativo/ Inativo" in df.columns else pd.Series(False, index=df.index)
+    crit_ieg = (pd.to_numeric(df["IEG"], errors="coerce") < 0.4) if "IEG" in df.columns else pd.Series(False, index=df.index)
+    # Adicione .str antes do .lower()
+    crit_psico = (df["Rec Psicologia"].astype(str).str.strip().str.lower().replace({"nan": ""}) != "")
+    
+    acompanhamento = int((crit_inativo | crit_ieg | crit_psico).sum())
 
     acoes = {
-        "plano_reforco": plano_reforco,
         "acompanhamento": acompanhamento,
-        "reuniao_pais": reuniao_pais,
+        "reuniao_pais": int((alto_mask & df["Indicado"].apply(_truthy)).sum()) if "Indicado" in df.columns else 0,
+        "plano_reforco": plano_reforco
     }
 
-    # Alertas prioritários (badge)
-    alertas = int(alto_total)
-    if "Indicado" in df.columns:
-        alertas += int(df["Indicado"].apply(_truthy).sum())
-    if "Rec Psicologia" in df.columns:
-        alertas += int((df["Rec Psicologia"].astype(str).str.strip().replace({"nan": ""}) != "").sum())
-
-    # Próximos prazos (config manual)
-    proximos_prazos = [
-        {"titulo": "Provas de Recuperação", "data": "A definir"},
-        {"titulo": "Reuniões de Pais", "data": "A definir"},
-        {"titulo": "Relatórios", "data": "A definir"},
-    ]
-
-    indicadores = {
-        "alto_risco": {"total": alto_total, "percentual": pct(alto_total)},
-        "medio_risco": {"total": medio_total, "percentual": pct(medio_total)},
-        "regulares": {"total": reg_total, "percentual": pct(reg_total)},
-        "total": total,
-    }
+    # 9. Badge de Alertas Totais
+    alertas = alto_total + (int(df["Indicado"].apply(_truthy).sum()) if "Indicado" in df.columns else 0)
 
     return {
-        "indicadores": indicadores,
+        "indicadores": {
+            "alto_risco": {"total": alto_total, "percentual": pct(alto_total)},
+            "medio_risco": {"total": medio_total, "percentual": pct(medio_total)},
+            "regulares": {"total": reg_total, "percentual": pct(reg_total)},
+            "total": total,
+        },
         "alunos_alto_risco": alunos_alto_risco_payload,
         "disciplinas": disciplinas,
         "tendencia": tendencia,
         "acoes": acoes,
-        "proximos_prazos": proximos_prazos,
+        "proximos_prazos": [
+            {"titulo": "Provas de Recuperação", "data": "A definir"},
+            {"titulo": "Reuniões de Pais", "data": "A definir"},
+            {"titulo": "Relatórios", "data": "A definir"},
+        ],
         "alertas_count": alertas,
         "media_geral": media_geral_display,
     }
@@ -591,9 +663,6 @@ def dashboard() -> Any:
     df2022 = _load_df_with_risk("PEDE2022", None, None).reset_index(drop=True)
     df2023 = _load_df_with_risk("PEDE2023", None, None).reset_index(drop=True)
     df2024 = _load_df_with_risk("PEDE2024", None, None).reset_index(drop=True)
-
-    ctx["acoes"]["sem_progresso"] = len(detectar_alunos_sem_progresso(df2022, df2023, df2024))
-    ctx["acoes"]["proxima_fase"] = len(recomendar_proxima_fase(df2022, df2023, df2024))
 
     ctx["acoes"]["sem_progresso"] = len(
         detectar_alunos_sem_progresso(df2022, df2023, df2024)
@@ -716,8 +785,9 @@ def predict() -> Response:
         preds.append(
             {
                 "ra": ra,
-                "risk_score": float(score.loc[i]) if i in score.index else 0.0,
-                "risk_label": str(label.loc[i]) if i in label.index else "Regular",
+                "risk_label": str(label.loc[i]),
+                "risk_score": float(score.loc[i]),
+                "risk_type": "risco_futuro"
             }
         )
 
@@ -736,134 +806,29 @@ def predict() -> Response:
     ), 200
 
 
-def _load_df_with_risk(sheet: str, escola: Optional[str], q: Optional[str]) -> pd.DataFrame:
-    df_raw = _read_xlsx_sheet(DATA_XLSX_PATH, sheet)
+def _load_df_with_risk(sheet_name: str, escola: Optional[str], q: Optional[str]) -> pd.DataFrame:
+    """Função utilitária para carregar, padronizar e aplicar risco a um sheet específico."""
+    df_raw = _read_xlsx_sheet(DATA_XLSX_PATH, sheet_name)
     df_std = _standardize_columns(df_raw)
     df_std = df_std.loc[:, ~df_std.columns.duplicated()].copy()
-
-    df_filtered = _apply_filters(df_std, escola if escola and escola != "Todas" else None, q)
-
-    df = _standardize_columns(df_filtered)
-    df = df.loc[:, ~df.columns.duplicated()].copy()
-    df = _coerce_numeric(df, ["Matem", "Portug", "Inglês", "INDE 22", "IEG", "IPS"])
-
+    
+    # Aplica filtros se houver
+    df_filtered = _apply_filters(df_std, escola, q)
+    
+    # Coerção e Risco
+    cols_to_fix = ["Matem", "Portug", "Inglês", "INDE 22", "Pedra 20", "Pedra 21", "Pedra 22", "IEG", "IPS"]
+    df_filtered = _coerce_numeric(df_filtered, cols_to_fix)
+    
     pre, model, metadata = _load_model_bundle()
-    if pre is not None and model is not None:
-        feature_cols = metadata.get("feature_columns")
-        if isinstance(feature_cols, list) and feature_cols:
-            score, risco = _predict_risk_with_model(df, pre, model, [str(c) for c in feature_cols])
+    try:
+        if pre is not None and model is not None:
+            score, risco = _predict_risk_with_model(df_filtered, pre, model, metadata.get("feature_columns", []))
         else:
-            score, risco = _predict_risk_fallback(df)
-    else:
-        score, risco = _predict_risk_fallback(df)
-
-    df = df.assign(_risk_score=score, _risk_label=risco)
-    df["_media"] = df.apply(_calc_media_disciplinas, axis=1)
-    df["_media_classe"] = df["_media"].apply(_media_class)
-    return df
-
-@app.route("/intervencoes/plano-reforco", methods=["GET", "POST"])
-def intervencao_plano_reforco() -> Any:
-    # salvar rota anterior para o botão voltar
-    session["last_page"] = request.url
-    msg = None 
-
-
-    sheet = request.args.get("sheet", DEFAULT_SHEET)
-    if sheet not in AVAILABLE_SHEETS:
-        sheet = DEFAULT_SHEET
-
-    escola = request.args.get("escola")
-    q = request.args.get("q")
-
-    df = _load_df_with_risk(sheet, escola, q)
-
-    # 1) Critério de risco: Alto OU Muito Alto
-    alto_mask = df["_risk_label"].isin(["Alto", "Muito Alto"])
-
-    # 2) Critério "sem recuperação": se não existir Rec Av*, considera todos como sem rec
-    rec_cols = [c for c in ["Rec Av1", "Rec Av2", "Rec Av3", "Rec Av4"] if c in df.columns]
-    if rec_cols:
-        rec_df = df[rec_cols].astype("string")
-        rec_df = rec_df.apply(lambda s: s.str.strip(), axis=0).fillna("")
-        rec_df = rec_df.replace({"nan": "", "NaN": "", "None": ""})
-        rec_present = rec_df.ne("").any(axis=1)
-    else:
-        rec_present = pd.Series(False, index=df.index, dtype="bool")
-
-    # 3) Lê confirmados e remove da lista pendente
-    store = _read_plano_reforco_store()
-    confirmados_ra = set(store[store["sheet"].astype(str) == sheet]["ra"].astype(str).str.strip().tolist())
-
-    # pendentes = alto/muito alto + sem rec + ainda não confirmado
-    pendentes_df = df.loc[alto_mask & (~rec_present)].copy()
-    pendentes_df["RA"] = pendentes_df.get("RA", "").astype(str).str.strip()
-    pendentes_df = pendentes_df[~pendentes_df["RA"].isin(confirmados_ra)]
-    pendentes_df = pendentes_df.sort_values(by="_risk_score", ascending=False, na_position="last")
-
-    pendentes: List[Dict[str, Any]] = []
-    for _, r in pendentes_df.iterrows():
-        pendentes.append(
-            {
-                "ra": str(r.get("RA", "")).strip(),
-                "nome": str(r.get("Nome", "")).strip(),
-                "turma": str(r.get("Turma", "")).strip(),
-                "media": (f"{float(r.get('_media')):.1f}".replace(".", ",") if pd.notna(r.get("_media")) else "-"),
-                "media_classe": str(r.get("_media_classe", "ok")),
-                "risco": str(r.get("_risk_label", "Regular")),
-            }
-        )
-
-    # confirmados (para o mesmo sheet)
-    confirmados_df = store[store["sheet"].astype(str) == sheet].copy()
-    confirmados: List[Dict[str, Any]] = confirmados_df.to_dict(orient="records")
-
-    if request.method == "POST":
-        selecionados = request.form.getlist("ra")
-        disciplina = (request.form.get("disciplina") or "").strip()
-        observacao = (request.form.get("observacao") or "").strip()
-        data = (request.form.get("data") or "").strip()
-
-        # grava somente os selecionados
-        selected_rows: List[Dict[str, str]] = []
-        pend_map = {p["ra"]: p for p in pendentes}
-
-        for ra in selecionados:
-            ra_s = str(ra).strip()
-            p = pend_map.get(ra_s)
-            if not p:
-                continue
-            selected_rows.append(
-                {
-                    "sheet": sheet,
-                    "ra": ra_s,
-                    "nome": str(p["nome"]),
-                    "turma": str(p["turma"]),
-                    "data": data,
-                    "disciplina": disciplina,
-                    "observacao": observacao,
-                }
-            )
-
-        msg: str
-        if selected_rows:
-            _append_plano_reforco_rows(selected_rows)
-            msg = f"Plano de reforço confirmado para {len(selected_rows)} aluno(s)."
-        else:
-            msg = "Nenhum aluno selecionado para confirmação."
-
-    return render_template(
-        "intervencao_plano_reforco.html",
-        pendentes=pendentes,
-        confirmados=_read_plano_reforco_store().query("sheet == @sheet").to_dict(orient="records"),
-        msg=msg,
-        sheet=sheet,
-        available_sheets=AVAILABLE_SHEETS,
-        escola_nome=escola or "Todas",
-        alertas_count=int(alto_mask.sum()),
-        usuario_nome="Prof. Ana",
-        usuario_cargo="Coordenadora Pedagógica",
-    )
+            score, risco = _predict_risk_fallback(df_filtered)
+    except:
+        score, risco = _predict_risk_fallback(df_filtered)
+        
+    return df_filtered.assign(_risk_score=score, _risk_label=risco)
 
 @app.route("/intervencoes/acompanhamento", methods=["GET", "POST"])
 def intervencao_acompanhamento() -> Any:
@@ -1021,61 +986,64 @@ def export_relatorio() -> Response:
 def aluno_detalhe(ra: str) -> Any:
     sheet = request.args.get("sheet", DEFAULT_SHEET)
 
+    # 1. Carga e Padronização
     df_raw = _read_xlsx_sheet(DATA_XLSX_PATH, sheet)
     df = _standardize_columns(df_raw)
     df = _coerce_numeric(
         df,
         [
-            "Matem",
-            "Portug",
-            "Inglês",
-            "INDE 22",
-            "Pedra 20",
-            "Pedra 21",
-            "Pedra 22",
-            "IEG",
-            "IPS",
-            "IAA",
-            "IDA",
-            "IPV",
-            "IAN",
+            "Matem", "Portug", "Inglês", "INDE 22", 
+            "Pedra 20", "Pedra 21", "Pedra 22",
+            "IEG", "IPS", "IAA", "IDA", "IPV", "IAN",
         ],
     )
 
+    # 2. Localização do Aluno
     ra_norm = str(ra).strip()
-    row_df = df[df["RA"].astype(str).str.strip() == ra_norm]
+    row_df = df[df["RA"].astype(str).str.strip() == ra_norm].copy()
+
+    # Validação imediata: se não achar o aluno, para aqui
     if row_df.empty:
         return abort(404, description=f"Aluno não encontrado. RA={ra_norm}")
 
-    # Garantia: pega exatamente 1 linha
+    # Força a existência de colunas para o Modelo (evita Warnings de Imputer)
+    cols_modelo = ["Pedra 20", "Pedra 21", "Pedra 22", "Rec Av1", "Rec Av2", "Rec Av3", "Rec Av4"]
+    for col in cols_modelo:
+        if col not in row_df.columns:
+            row_df[col] = np.nan
+
+    # Pega a linha do aluno para cálculos individuais
     row = row_df.iloc[0]
 
-    # Badge e escola (para o base.html)
-    escola_nome = str(row.get("Instituição de ensino", "Todas")).strip() or "Todas"
-
-    # Predição (modelo se existir, senão fallback)
+    # 3. Predição de Risco (Modelo ou Fallback)
     pre, model, metadata = _load_model_bundle()
-    if pre is not None and model is not None:
-        feature_cols = metadata.get("feature_columns")
-        if isinstance(feature_cols, list) and feature_cols:
-            score_s, label_s = _predict_risk_with_model(row_df, pre, model, [str(c) for c in feature_cols])
+    risk_tipo = "risco_fallback"
+    
+    try:
+        if pre is not None and model is not None:
+            feature_cols = metadata.get("feature_columns")
+            if isinstance(feature_cols, list) and feature_cols:
+                score_s, label_s = _predict_risk_with_model(row_df, pre, model, [str(c) for c in feature_cols])
+                risk_tipo = "risco_futuro"
+            else:
+                score_s, label_s = _predict_risk_fallback(row_df)
         else:
             score_s, label_s = _predict_risk_fallback(row_df)
-    else:
+    except Exception:
         score_s, label_s = _predict_risk_fallback(row_df)
 
     risk_score = float(score_s.iloc[0]) if not score_s.empty else 0.0
     risco = str(label_s.iloc[0]) if not label_s.empty else "Regular"
 
-    # Média disciplinas
+    # 4. Formatação de Dados para o Template
     media = _calc_media_disciplinas(row)
     media_fmt = f"{media:.1f}".replace(".", ",") if pd.notna(media) else "-"
 
-    # Campos exibidos
     aluno_payload = {
         "ra": ra_norm,
-        "nome": str(row.get("Nome", "")).strip(),
-        "turma": str(row.get("Turma", "")).strip(),
+        "nome": str(row.get("Nome", "Não Informado")).strip(),
+        "turma": str(row.get("Turma", "-")).strip(),
+        "risk_type": risk_tipo,
         "risk_score": f"{risk_score:.2f}".replace(".", ","),
         "risco": risco,
         "media": media_fmt,
@@ -1100,50 +1068,43 @@ def aluno_detalhe(ra: str) -> Any:
         "rec_av4": (str(row.get("Rec Av4", "")).strip() or "-"),
     }
 
-    # Recomendações (texto idêntico à lógica do dashboard)
-    # Plano de Reforço: sem recuperação preenchida
-    rec_vals = [
-        str(row.get("Rec Av1", "")).strip(),
-        str(row.get("Rec Av2", "")).strip(),
-        str(row.get("Rec Av3", "")).strip(),
-        str(row.get("Rec Av4", "")).strip(),
-    ]
-    sem_recuperacao = not any(v and v.casefold() != "nan" for v in rec_vals)
-
-    # Acompanhamento: critérios OR
+    # 5. Lógica de Recomendações
     acomp_flags = []
-    if pd.notna(row.get("IEG")):
-        acomp_flags.append(float(row.get("IEG")) < 0.4)
-    if pd.notna(row.get("IPS")):
-        acomp_flags.append(float(row.get("IPS")) < 0.4)
-    rec_psico = str(row.get("Rec Psicologia", "")).strip()
-    acomp_flags.append(bool(rec_psico and rec_psico.casefold() != "nan"))
+    if pd.notna(row.get("IEG")): acomp_flags.append(float(row.get("IEG")) < 0.4)
+    if pd.notna(row.get("IPS")): acomp_flags.append(float(row.get("IPS")) < 0.4)
+    
+    rec_psico = str(row.get("Rec Psicologia", "")).strip().lower()
+    acomp_flags.append(bool(rec_psico and rec_psico != "nan" and rec_psico != ""))
 
-    # Reuniões de Pais: alto risco + indicado
-    reuniao_pais = risco in {"Alto", "Muito Alto"} and _truthy(row.get("Indicado"))
+    reuniao_pais = (risco in ["Alto", "Muito Alto"]) and _truthy(row.get("Indicado"))
 
     recomendacoes = {
-        "plano_reforco": "Aluno sem recuperação" if sem_recuperacao else "Aluno com recuperação registrada",
         "acompanhamento": "Sinal para acompanhamento" if any(acomp_flags) else "Sem sinal crítico de acompanhamento",
         "reunioes_pais": "Aluno crítico indicado" if reuniao_pais else "Sem critério para reunião de pais",
     }
 
-    # Badge: reaproveita cálculo do dashboard no DF inteiro (coerente com topo)
+    # 6. Contexto Global e Dashboard
     ctx_badge = _build_dashboard_context(df)
     alertas_count = int(ctx_badge.get("alertas_count", 0))
+    escola_nome = str(row.get("Instituição de ensino", "Todas")).strip() or "Todas"
 
-    # User info (placeholder controlado por servidor)
-    usuario_nome = session.get("usuario_nome", "Usuário")
-    usuario_cargo = session.get("usuario_cargo", "Cargo")
+    # User info da sessão
+    usuario_nome = session.get("usuario_nome", "Prof. Ana")
+    usuario_cargo = session.get("usuario_cargo", "Coordenadora Pedagógica")
+
+    # Diagnóstico de IA
+    recomendacao_ia = gerar_recomendacao_ia(row)
 
     return render_template(
         "aluno_detalhe.html",
+        aluno=aluno_payload,
         alertas_count=alertas_count,
         escola_nome=escola_nome,
         usuario_nome=usuario_nome,
         usuario_cargo=usuario_cargo,
-        aluno=aluno_payload,
         recomendacoes=recomendacoes,
+        recomendacao_ia=recomendacao_ia,
+        sheet=sheet
     )
 
 
@@ -1275,26 +1236,6 @@ def api_tendencia() -> dict:
         "media": tendencia_media,
         "risco": tendencia_risco,
     }
-
-def _read_plano_reforco_store() -> pd.DataFrame:
-    if not PLANO_REFORCO_STORE.exists():
-        return pd.DataFrame(columns=["sheet", "ra", "nome", "turma", "data", "disciplina", "observacao"])
-    try:
-        return pd.read_csv(PLANO_REFORCO_STORE, sep=";", dtype=str).fillna("")
-    except Exception:
-        return pd.DataFrame(columns=["sheet", "ra", "nome", "turma", "data", "disciplina", "observacao"])
-
-
-def _append_plano_reforco_rows(rows: List[Dict[str, str]]) -> None:
-    df_old = _read_plano_reforco_store()
-    df_new = pd.DataFrame(rows, dtype=str).fillna("")
-    out = pd.concat([df_old, df_new], ignore_index=True)
-
-    # dedup por sheet+ra (mantém o primeiro registro)
-    out["_k"] = out["sheet"].astype(str) + "::" + out["ra"].astype(str)
-    out = out.drop_duplicates(subset=["_k"], keep="first").drop(columns=["_k"])
-
-    out.to_csv(PLANO_REFORCO_STORE, index=False, sep=";", encoding="utf-8-sig")
 
 @app.get("/alertas")
 def alertas() -> Any:

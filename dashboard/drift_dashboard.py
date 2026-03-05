@@ -59,14 +59,15 @@ def load_sheet(sheet: str) -> pd.DataFrame:
         st.error(f"Arquivo XLSX não encontrado: {XLSX_PATH}")
         st.stop()
 
+    df = pd.DataFrame() # Inicializa o DataFrame vazio
     try:
         df = pd.read_excel(XLSX_PATH, sheet_name=sheet, engine=None)
+        df = standardize_columns(df)
+        df = coerce_numeric(df)
     except Exception as exc:
         st.error(f"Erro ao ler a sheet '{sheet}': {exc}")
         st.stop()
 
-    df = standardize_columns(df)
-    df = coerce_numeric(df)
     return df
 
 

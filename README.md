@@ -1,302 +1,109 @@
-```md
-README.md:
-# Dashboard Educacional — Passos Mágicos (Datathon)
 
-Dashboard de monitoramento de risco de reprovação com:
-- Menu lateral e topbar (busca + escola + notificações + usuário)
-- Cards de indicadores (alto risco, risco médio, regulares, média geral com gauge)
-- Tabela de alunos em alto risco (com "Ver Detalhes")
-- Card "Filtrar por Disciplina"
-- Gráfico "Tendência Mensal" (Pedra 20/21/22)
-- Seção "Ações Recomendadas"
-- Card "Próximos Prazos" (config manual)
+```markdown
+# 🎓 Dashboard Educacional — Passos Mágicos (Datathon)
 
-> A classificação de risco é lida do modelo (quando existir) ou calculada por fallback (heurística) para o dashboard não quebrar.
+Este projeto é uma solução de **Inteligência de Dados e Monitoramento Pedagógico** desenvolvida para o Datathon. O sistema processa dados longitudinais de alunos, aplica modelos de Machine Learning para prever riscos de defasagem e oferece uma interface de gestão para intervenções rápidas.
 
 ---
 
-## 1) Pré-requisitos
+## 🛠️ Arquitetura do Sistema (app.py)
 
-- Python 3.10+
-- (Opcional) Docker
+O núcleo da aplicação foi construído em **Flask** e está dividido em camadas lógicas para garantir robustez e escalabilidade:
 
----
+### 1. Bootstrap e Configuração
+O código utiliza `Pathlib` para garantir que o projeto rode em qualquer sistema operacional (Windows/Linux) sem erro de caminhos. Ele configura o `REPO_ROOT` e injeta as pastas no `sys.path`, permitindo que os módulos internos em `src/` sejam importados corretamente.
 
-## 2) Estrutura
+### 2. Pipeline de Dados (Normalização)
+* **`_standardize_columns`**: Limpa os nomes das colunas vindas do Excel (remove espaços, acentos e padroniza para snake_case/camelCase esperado).
+* **`_coerce_numeric`**: Transforma colunas críticas (Notas, INDE, Pedras) em números reais. Se houver texto como "Mantido na Fase", ele converte para `NaN` para não quebrar os cálculos matemáticos.
+* **`_read_xlsx_sheet`**: Camada de IO que lê o arquivo `.xlsx` oficial, validando se o arquivo e a aba (2022, 2023 ou 2024) existem.
 
-```
+### 3. Motor de Predição de Risco
+O sistema opera em modo **Híbrido**:
+* **Modo ML (Oficial)**: Carrega o `model.joblib` e o `preprocessor.joblib`. Utiliza `predict_proba` para calcular a probabilidade de defasagem futura baseada nas features do `metadata.json`.
+* **Modo Fallback (Heurístico)**: Se o modelo não estiver treinado, o sistema aciona a função `_predict_risk_fallback`, que calcula o risco baseado no **INDE (Índice de Desenvolvimento Educacional)** e médias atuais, garantindo que o dashboard nunca fique vazio.
 
-.
-├── app.py
-├── requirements.txt
-├── Dockerfile
-├── templates/
-│   ├── base.html
-│   ├── home.html
-│   └── aluno_detalhe.html
-└── static/
-└── css/
-└── style.css
-
-````
+### 4. Inteligência Artificial Pedagógica
+* **`gerar_recomendacao_ia`**: Uma lógica de IA interna que analisa o perfil do aluno (Pedras, Risco, Notas e Psicologia) e gera um parecer descritivo em texto natural para o coordenador.
+* **Detecção de Estagnação**: A função `detectar_alunos_sem_progresso` cruza os dados de 2022 a 2024 para identificar alunos que não evoluíram de "Pedra" ou nota por 2 anos consecutivos.
 
 ---
 
-## 3) Rodar local (Python)
+## 🚀 Como Executar
 
-### Instalar dependências
+### 1. Instalação
 ```bash
 pip install -r requirements.txt
-````
 
-### Definir caminho do XLSX (obrigatório)
+```
 
-Você precisa apontar para o arquivo:
+### 2. Configuração do Banco de Dados
 
-* `BASE DE DADOS PEDE 2024 - DATATHON.xlsx`
-
-No Windows (PowerShell):
+O sistema lê o caminho da planilha através de variáveis de ambiente:
 
 ```powershell
-$env:PEDE_XLSX_PATH="C:\caminho\para\BASE DE DADOS PEDE 2024 - DATATHON.xlsx"
-python app.py
+# Windows
+$env:PEDE_XLSX_PATH="C:\dados\BASE DE DADOS PEDE 2024 - DATATHON.xlsx"
+# Linux/Mac
+export PEDE_XLSX_PATH="/dados/BASE DE DADOS PEDE 2024 - DATATHON.xlsx"
+
 ```
 
-No Linux/macOS:
+### 3. Treinamento do Modelo
+
+Para que o Dashboard use Machine Learning em vez da heurística:
 
 ```bash
-export PEDE_XLSX_PATH="/caminho/para/BASE DE DADOS PEDE 2024 - DATATHON.xlsx"
-python app.py
-```
+python -m src.train --xlsx "caminho_da_base.xlsx" --out "app/model"
 
-### Acessar
-
-* Dashboard: `http://localhost:5000/dashboard`
-
-### Trocar a sheet (2022/2023/2024)
-
-Por querystring:
-
-* `http://localhost:5000/dashboard?sheet=PEDE2022`
-* `http://localhost:5000/dashboard?sheet=PEDE2023`
-* `http://localhost:5000/dashboard?sheet=PEDE2024`
-
----
-
-## 4) Filtros (escola e busca)
-
-### Busca global (topo)
-
-Campo busca:
-
-* Nome
-* Turma
-* Matem / Portug / Inglês (conteúdo textual/número)
-
-### Escola
-
-O seletor exibido vem da coluna:
-
-* `Instituição de ensino`
-
-> No código, o filtro por escola está preparado via querystring `?escola=...`.
-
-Exemplo:
-
-* `http://localhost:5000/dashboard?sheet=PEDE2022&escola=Escola%20X`
-
----
-
-## 5) Rodar com Docker
-
-### Build
-
-```bash
-docker build -t pede-dashboard .
-```
-
-### Run
-
-Passe o caminho do XLSX via bind mount + env var.
-
-**Windows (PowerShell)**:
-
-```powershell
-docker run --rm -p 5000:5000 `
-  -e PEDE_XLSX_PATH="C:\data\BASE DE DADOS PEDE 2024 - DATATHON.xlsx" `
-  -e PEDE_DEFAULT_SHEET="PEDE2022" `
-  pede-dashboard
-```
-
-**Linux/macOS**:
-
-```bash
-docker run --rm -p 5000:5000 \
-  -e PEDE_XLSX_PATH="/data/BASE DE DADOS PEDE 2024 - DATATHON.xlsx" \
-  -e PEDE_DEFAULT_SHEET="PEDE2022" \
-  pede-dashboard
 ```
 
 ---
 
-Troque este código:
+## 📡 API Reference (Endpoints)
 
-```md
-## 6) Modelo (opcional)
-
-Se você treinar um modelo e salvar em:
-
-```
-
-app/model/model.joblib
-app/model/preprocessor.joblib
-app/model/metadata.json
-
-````
-
-o dashboard automaticamente passa a usar o modelo.
-
-### metadata.json esperado (mínimo)
-```json
-{
-  "feature_columns": ["INDE 22", "IEG", "IPS", "Matem", "Portug", "Inglês"]
-}
-````
-
-Se não existir modelo/metadata, o sistema usa fallback (heurística) para manter a UI funcionando.
-
-````
-
-por este código:
-```md
-## 6) Treinamento do Modelo (obrigatório no Datathon)
-
-O treino é **longitudinal (t -> t+1)**:
-- Treino: `PEDE2022 -> PEDE2023`
-- Teste temporal: `PEDE2023 -> PEDE2024` (quando houver RA em comum)
-
-### Instalar dependências (inclui scikit-learn)
-```bash
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-````
-
-### Rodar treino (gera artefatos em `app/model/`)
-
-```bash
-python -m src.train --xlsx "CAMINHO/BASE DE DADOS PEDE 2024 - DATATHON.xlsx" --out "app/model"
-```
-
-Arquivos gerados:
-
-```
-app/model/model.joblib
-app/model/preprocessor.joblib
-app/model/metadata.json
-```
-
-### Métricas reportadas
-
-O treino calcula (quando houver conjunto de teste temporal válido):
-
-* `roc_auc`
-* `pr_auc`
-* `f1`
-* `precision`
-* `recall`
-
-> Para o contexto educacional, **recall** é prioridade: perder aluno em risco é pior do que falso positivo.
-
-### Como o Dashboard usa o modelo
-
-Ao iniciar o `app.py`, se os arquivos abaixo existirem:
-
-* `app/model/model.joblib`
-* `app/model/preprocessor.joblib`
-* `app/model/metadata.json` com `feature_columns`
-
-o dashboard passa a usar:
-
-* `predict_proba` → `P(defasagem)` (0 a 1)
-* thresholds → `Muito Alto / Alto / Médio / Regular`
-
-Thresholds (configurados em `metadata.json`):
-
-* `>= 0.85` → Muito Alto
-* `>= 0.70` → Alto
-* `>= 0.50` → Médio
-* `< 0.50` → Regular
-
-Se os artefatos não existirem, o sistema usa fallback (heurística) apenas para manter a UI funcionando.
-
-```
-
-**Onde alterar:** no `README.md`, substitua a seção inteira **“## 6) Modelo (opcional)”** pelo bloco acima.
-
-Confirma para eu enviar o próximo arquivo.
-
-👉 Próximo sugerido: `src/__init__.py` (para permitir `python -m src.train`) + `src/features.py` (centralizar normalização/seleção de features e evitar duplicação entre `app.py` e `src/train.py`).
-```
-
-
-## 7) Rotas principais
-
-### Dashboard (UI)
-* `GET /dashboard` — tela principal
-* `GET /aluno/<ra>` — tela de detalhes do aluno
+| Rota | Método | Descrição |
+| --- | --- | --- |
+| `/dashboard` | `GET` | Interface principal com indicadores e filtros. |
+| `/aluno/<ra>` | `GET` | Ficha detalhada do aluno com diagnóstico de IA. |
+| `/predict` | `POST` | **Endpoint Datathon**: Recebe JSON com dados do aluno e retorna score/classe de risco. |
+| `/export` | `GET` | Gera um CSV (com BOM para Excel) dos alunos em risco. |
+| `/api/tendencia` | `GET` | Retorna dados JSON para os gráficos de evolução histórica. |
 
 ---
 
-### API de Predição (Datathon)
+## 📊 Lógica de Negócio e Dashboards
 
-#### `POST /predict`
+### Filtros Inteligentes
 
-Endpoint oficial para inferência de risco de reprovação.
+O dashboard permite filtrar por **Instituição de Ensino** e **Busca Global** (Nome, RA ou Turma). Se uma escola for selecionada e não houver dados na aba atual, o sistema faz um fallback automático para "Todas as Escolas", evitando telas de erro 404.
 
-O endpoint aceita **1 aluno** ou **lista de alunos** e retorna:
-- score de risco (`0.0 – 1.0`)
-- classe de risco (`Muito Alto | Alto | Médio | Regular`)
-- indicação se o modelo treinado foi usado ou fallback heurístico
+### Réguas de Risco (Thresholds)
+
+As cores e alertas do sistema seguem a lógica:
+
+* 🔴 **Muito Alto**: Score ≥ 0.85 ou INDE < 4.0
+* 🟠 **Alto**: Score ≥ 0.70 ou INDE < 5.5
+* 🟡 **Médio**: Score ≥ 0.50 ou INDE < 6.5
+* 🟢 **Regular**: Score < 0.50 ou INDE ≥ 6.5
 
 ---
 
-#### 🔹 Exemplo 1 — Predição por RA (enriquecimento automático)
+## 🐳 Docker
+
+Para rodar em container, utilize o `Dockerfile` incluso:
 
 ```bash
-curl -X POST http://localhost:5000/predict?sheet=PEDE2022 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "RA": "123456"
-  }'
+docker build -t pm-dash .
+docker run -p 5000:5000 -e PEDE_XLSX_PATH="/app/data.xlsx" -v /caminho/local.xlsx:/app/data.xlsx pm-dash
 
-
-Resposta:
-
-{
-  "model_version": "v1.0.0",
-  "used_model": true,
-  "predictions": [
-    {
-      "ra": "123456",
-      "risk_score": 0.82,
-      "risk_label": "Alto"
-    }
-  ]
-}
-
-
-
-## 8) Observações importantes
-
-* O dashboard foi feito para ser **idêntico** ao layout especificado.
-* O card “Próximos Prazos” é **manual** (não vem da planilha).
-* A tendência mensal usa `Pedra 20`, `Pedra 21`, `Pedra 22` como eixo temporal.
+```
 
 ---
 
+**Nota:** Este projeto foi desenvolvido focado em **Recall**, garantindo que nenhum aluno com alta probabilidade de defasagem passe despercebido pela equipe pedagógica.
+
 ```
 
-Confirma para eu enviar o próximo arquivo.
+---
 
-👉 Próximo sugerido: `static/img/user.png` (fallback simples) **ou** `pytest` (tests + coverage >= 80%) para cumprir o requisito do datathon.
-```

@@ -30,14 +30,24 @@ RENAME_MAP: Dict[str, str] = {
 
 def standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Padroniza nomes de colunas entre PEDE2022 / PEDE2023 / PEDE2024.
-    Esta função DEVE ser usada tanto no treino quanto no app (inferência).
+    Padroniza colunas e REMOVE duplicatas — essencial para concat e modelo.
     """
     out = df.copy()
-    out.columns = [str(c).strip() for c in out.columns]
-    out = out.rename(columns={k: v for k, v in RENAME_MAP.items() if k in out.columns})
-    return out
 
+    # Normaliza nomes
+    out.columns = [str(c).strip() for c in out.columns]
+
+    # Aplica renomeações
+    out = out.rename(columns={k: v for k, v in RENAME_MAP.items() if k in out.columns})
+
+    # Remove colunas duplicadas após rename
+    out = out.loc[:, ~out.columns.duplicated()]
+
+    # Garante que índice não seja MultiIndex
+    if isinstance(out.index, pd.MultiIndex):
+        out.index = out.index.to_flat_index()
+
+    return out
 
 # =========================
 # FEATURE SELECTION
@@ -112,24 +122,29 @@ FORBIDDEN_FEATURES: set[str] = {
 }
 
 
+# No src/features.py
 CATEGORICAL_FEATURES: set[str] = {
     "Fase",
     "Turma",
     "Gênero",
     "Instituição de ensino",
+    "Atingiu PV",
+    "Indicado",
+    "Fase ideal",  # Adicione esta se não tiver
+    "Destaque IEG",
+    "Destaque IDA",
+    "Destaque IPV",
+    "Avaliador1", "Avaliador2", "Avaliador3", "Avaliador4"
 }
-
-
 def split_features(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
-    """
-    Retorna (categorical_cols, numeric_cols) já filtradas e prontas
-    para uso no ColumnTransformer.
-    """
     cols = [
         c
         for c in df.columns
         if c in ALLOWED_FEATURES and c not in FORBIDDEN_FEATURES
     ]
+
+    # remove colunas autorizadas mas ausentes no df
+    cols = [c for c in cols if c in df.columns]
 
     if not cols:
         raise ValueError("Nenhuma feature válida encontrada após filtros.")
@@ -174,7 +189,7 @@ def coerce_numeric(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     for c in NUMERIC_COLUMNS:
         if c in out.columns:
-            out[c] = pd.to_numeric(out[c], errors="coerce")
+            out[c] = pd.to_numeric(out[c], errors="coerce").astype(float)
     return out
 
 

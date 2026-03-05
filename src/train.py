@@ -23,9 +23,19 @@ from sklearn.metrics import (
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.ensemble import HistGradientBoostingClassifier
-from src.features import coerce_numeric
-from src.features import split_features
-from src.features import standardize_columns
+from pathlib import Path
+import sys
+
+# Caminho da pasta "src" correta do projeto
+CURRENT_DIR = Path(__file__).resolve().parent      # .../Analise-de-Risco-Escolar/src
+PROJECT_DIR = CURRENT_DIR.parent                   # .../Analise-de-Risco-Escolar
+
+# Garante que o src correto esteja no sys.path
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
+
+# Agora os imports SEMPRE virão do projeto atual
+from src.features import standardize_columns, split_features, coerce_numeric
 try:
     import joblib  # type: ignore
 except Exception as exc:  # pragma: no cover
@@ -50,6 +60,8 @@ PAIR_SPECS: List[PairSpec] = [
     PairSpec(x_sheet="PEDE2023", y_sheet="PEDE2024", x_year=2023, y_year=2024),
 ]
 
+# NOVO: dataset multianual consolidado
+MULTI_YEARS = ["PEDE2022", "PEDE2023", "PEDE2024"]
 
 def _read_sheet(xlsx_path: Path, sheet: str) -> pd.DataFrame:
     if not xlsx_path.exists():
@@ -88,48 +100,50 @@ def _to_binary_target(series: pd.Series) -> pd.Series:
     return out.astype(int)
 
 
-def _merge_pair(df_x: pd.DataFrame, df_y: pd.DataFrame) -> pd.DataFrame:
-    if "RA" not in df_x.columns or "RA" not in df_y.columns:
-        raise KeyError("Coluna obrigatória 'RA' ausente em uma das sheets.")
-
-    x = df_x.copy()
-    y = df_y.copy()
-
-    x["RA"] = x["RA"].astype(str).str.strip()
-    y["RA"] = y["RA"].astype(str).str.strip()
-
-    # Target precisa existir no ano y
-    if "Defasagem" not in y.columns:
-        raise KeyError("Coluna obrigatória 'Defasagem' ausente na sheet de target.")
-
-    # Merge (inner): só alunos presentes nos dois anos
-    y_target = y[["RA", "Defasagem"]].rename(columns={"Defasagem": "Defasagem_next_year"})
-
-    merged = x.merge(
-        y_target,
-        on="RA",
-        how="inner",
-    )
-    return merged
-
-
 def build_longitudinal_dataset(xlsx_path: Path) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Retorna (train_df, test_df) usando split temporal:
-      train: 2022->2023
-      test : 2023->2024
-    Se o par test ficar vazio, faz split aleatório depois (handled no train()).
+    NOVA VERSÃO:
+    Monta dataset multianual real, unindo 2022 + 2023 + 2024,
+    e cria target baseado na evolução histórica.
     """
-    train_pair = PAIR_SPECS[0]
-    test_pair = PAIR_SPECS[1]
 
-    df_22 = _read_sheet(xlsx_path, train_pair.x_sheet)
-    df_23 = _read_sheet(xlsx_path, train_pair.y_sheet)
-    train_df = _merge_pair(df_22, df_23)
+    dfs = []
+    for year, sheet in zip([2022, 2023, 2024], MULTI_YEARS):
+        df = _read_sheet(xlsx_path, sheet)
 
-    df_23x = _read_sheet(xlsx_path, test_pair.x_sheet)
-    df_24 = _read_sheet(xlsx_path, test_pair.y_sheet)
-    test_df = _merge_pair(df_23x, df_24)
+        # 🔒 Remove duplicação de colunas
+        df = df.loc[:, ~df.columns.duplicated()]
+
+        # 🔒 Garante que não existe MultiIndex
+        if isinstance(df.index, pd.MultiIndex):
+            df.index = df.index.to_flat_index()
+
+        # 🔒 Reseta índice sempre
+        df = df.reset_index(drop=True)
+
+        # 🔒 Remove linhas com índice duplicado após reset
+        df = df.copy()
+
+        # 🔒 Adiciona ano
+        df["ano"] = year
+
+        dfs.append(df)
+
+    # 🔥 Concatenar de forma totalmente segura
+    full = pd.concat(dfs, ignore_index=True)
+    full = full.loc[:, ~full.columns.duplicated()].reset_index(drop=True)
+
+    
+    # Criar target: aluno com alta defasagem / queda histórica
+    full["Defasagem_next_year"] = (
+        (pd.to_numeric(full.get("INDE 22"), errors="coerce") < 4)
+        | (pd.to_numeric(full.get("IPS"), errors="coerce") < 0.4)
+        | (pd.to_numeric(full.get("Pedra 22"), errors="coerce") <= 1)
+    ).astype(int)
+
+    # Separação temporal: treino = até 2023, teste = 2024
+    train_df = full[full["ano"] < 2024].copy()
+    test_df = full[full["ano"] == 2024].copy()
 
     return train_df, test_df
 
@@ -197,6 +211,19 @@ def train_and_evaluate(
     y_test: Optional[np.ndarray] = None
 
     cat_cols, num_cols = choose_feature_columns(train_df)
+
+    # GARANTE QUE NUMÉRICAS SÃO NÚMEROS (Resolve o erro do 'Não')
+    for c in num_cols:
+        train_df[c] = pd.to_numeric(train_df[c], errors='coerce')
+        if not test_df.empty:
+            test_df[c] = pd.to_numeric(test_df[c], errors='coerce')
+
+    # Corrige tipos mistos nas categóricas
+    for c in cat_cols:
+        train_df[c] = train_df[c].astype(str).replace("nan", "")
+        if not test_df.empty:
+            test_df[c] = test_df[c].astype(str).replace("nan", "")
+
     feature_cols = cat_cols + num_cols
 
     x_train_full = train_df[feature_cols].copy()
