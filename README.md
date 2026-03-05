@@ -1,41 +1,219 @@
-
-```markdown
 # 🎓 Dashboard Educacional — Passos Mágicos (Datathon)
 
-Este projeto é uma solução de **Inteligência de Dados e Monitoramento Pedagógico** desenvolvida para o Datathon. O sistema processa dados longitudinais de alunos, aplica modelos de Machine Learning para prever riscos de defasagem e oferece uma interface de gestão para intervenções rápidas.
+Este projeto é uma solução de **Inteligência de Dados e Monitoramento Pedagógico** desenvolvida para o Datathon.
+O sistema processa dados longitudinais de alunos, aplica modelos de **Machine Learning para prever riscos de defasagem** e oferece uma **interface de gestão pedagógica** para tomada de decisão rápida.
 
 ---
 
-## 🛠️ Arquitetura do Sistema (app.py)
+---
 
-O núcleo da aplicação foi construído em **Flask** e está dividido em camadas lógicas para garantir robustez e escalabilidade:
+# 📈 Objetivo do Projeto
 
-### 1. Bootstrap e Configuração
-O código utiliza `Pathlib` para garantir que o projeto rode em qualquer sistema operacional (Windows/Linux) sem erro de caminhos. Ele configura o `REPO_ROOT` e injeta as pastas no `sys.path`, permitindo que os módulos internos em `src/` sejam importados corretamente.
+Este projeto busca aplicar **Ciência de Dados na Educação**, permitindo:
 
-### 2. Pipeline de Dados (Normalização)
-* **`_standardize_columns`**: Limpa os nomes das colunas vindas do Excel (remove espaços, acentos e padroniza para snake_case/camelCase esperado).
-* **`_coerce_numeric`**: Transforma colunas críticas (Notas, INDE, Pedras) em números reais. Se houver texto como "Mantido na Fase", ele converte para `NaN` para não quebrar os cálculos matemáticos.
-* **`_read_xlsx_sheet`**: Camada de IO que lê o arquivo `.xlsx` oficial, validando se o arquivo e a aba (2022, 2023 ou 2024) existem.
+* identificar alunos em risco
+* antecipar defasagens escolares
+* apoiar decisões pedagógicas
+* orientar intervenções educacionais
 
-### 3. Motor de Predição de Risco
-O sistema opera em modo **Híbrido**:
-* **Modo ML (Oficial)**: Carrega o `model.joblib` e o `preprocessor.joblib`. Utiliza `predict_proba` para calcular a probabilidade de defasagem futura baseada nas features do `metadata.json`.
-* **Modo Fallback (Heurístico)**: Se o modelo não estiver treinado, o sistema aciona a função `_predict_risk_fallback`, que calcula o risco baseado no **INDE (Índice de Desenvolvimento Educacional)** e médias atuais, garantindo que o dashboard nunca fique vazio.
-
-### 4. Inteligência Artificial Pedagógica
-* **`gerar_recomendacao_ia`**: Uma lógica de IA interna que analisa o perfil do aluno (Pedras, Risco, Notas e Psicologia) e gera um parecer descritivo em texto natural para o coordenador.
-* **Detecção de Estagnação**: A função `detectar_alunos_sem_progresso` cruza os dados de 2022 a 2024 para identificar alunos que não evoluíram de "Pedra" ou nota por 2 anos consecutivos.
+Tudo através de **dados longitudinais e inteligência artificial**.
 
 ---
 
-## 🚀 Como Executar
+# 🛠️ Arquitetura do Sistema (app.py)
 
-### 1. Instalação
-```bash
-pip install -r requirements.txt
+O núcleo da aplicação foi construído em **Flask** e está dividido em camadas lógicas para garantir **robustez, legibilidade e escalabilidade**.
+
+---
+
+# 1️⃣ Bootstrap e Configuração
+
+O código utiliza **Pathlib** para garantir que o projeto rode em qualquer sistema operacional (**Windows / Linux / MacOS**) sem problemas de caminho.
+
+O sistema:
+
+* Define o `REPO_ROOT`
+* Injeta as pastas do projeto no `sys.path`
+* Permite importar módulos internos de `src/`
+
+Isso evita problemas comuns de importação quando o projeto roda fora da raiz.
+
+---
+
+# 2️⃣ Pipeline de Dados (Normalização)
+
+Antes de qualquer análise ou predição, os dados passam por um pipeline de limpeza.
+
+### `_standardize_columns`
+
+Responsável por padronizar nomes de colunas:
+
+* remove acentos
+* remove espaços
+* converte para **snake_case**
+* garante compatibilidade com o modelo
+
+Exemplo:
 
 ```
+"Nota Matemática" → nota_matematica
+```
+
+---
+
+### `_coerce_numeric`
+
+Transforma colunas críticas em valores numéricos:
+
+* Notas
+* INDE
+* Pedras
+
+Se houver textos como:
+
+```
+"Mantido na Fase"
+```
+
+o sistema converte para:
+
+```
+NaN
+```
+
+Isso evita quebra nos cálculos matemáticos.
+
+---
+
+### `_read_xlsx_sheet`
+
+Camada de **IO controlado** responsável por:
+
+* Ler o arquivo `.xlsx`
+* Validar se o arquivo existe
+* Validar se a aba existe
+
+Abas suportadas:
+
+* 2022
+* 2023
+* 2024
+
+Caso a aba não exista, o sistema gera erro controlado.
+
+---
+
+# 3️⃣ Motor de Predição de Risco
+
+O sistema opera em modo **Híbrido**.
+
+## 🧠 Modo ML (Oficial)
+
+Carrega os arquivos:
+
+```
+model.joblib
+preprocessor.joblib
+```
+
+Utiliza:
+
+```
+predict_proba()
+```
+
+para calcular a **probabilidade de defasagem educacional futura** com base nas features definidas em:
+
+```
+metadata.json
+```
+
+---
+
+## 🛟 Modo Fallback (Heurístico)
+
+Caso o modelo ainda não tenha sido treinado, o sistema ativa automaticamente:
+
+```
+_predict_risk_fallback()
+```
+
+Essa função calcula o risco com base em:
+
+* INDE
+* Médias atuais
+* Histórico de evolução
+
+Isso garante que **o dashboard nunca fique vazio**.
+
+---
+
+# 4️⃣ Inteligência Artificial Pedagógica
+
+O sistema possui um motor de análise pedagógica automatizado.
+
+### `gerar_recomendacao_ia`
+
+Analisa:
+
+* Pedras
+* Risco
+* Notas
+* Perfil psicológico
+
+E gera um **parecer textual automático** para o coordenador pedagógico.
+
+Exemplo de saída:
+
+```
+Aluno apresenta risco moderado de defasagem.
+Recomendado reforço em matemática e acompanhamento socioemocional.
+```
+
+---
+
+### Detecção de Estagnação
+
+A função:
+
+```
+detectar_alunos_sem_progresso()
+```
+
+cruza os dados de:
+
+* 2022
+* 2023
+* 2024
+
+Para detectar alunos que:
+
+* não evoluíram de pedra
+* mantiveram notas estagnadas por 2 anos
+
+Esses casos são destacados no dashboard para intervenção.
+
+---
+
+# 🚀 Como Executar
+
+## 1️⃣ Instalar dependências
+
+```bash
+pip install -r requirements.txt
+```
+
+# 🧠 Tecnologias Utilizadas
+
+* Python
+* Flask
+* Pandas
+* Scikit-learn
+* Joblib
+* Machine Learning
+* Data Engineering
+
+---
 
 ### 2. Configuração do Banco de Dados
 
@@ -105,5 +283,5 @@ docker run -p 5000:5000 -e PEDE_XLSX_PATH="/app/data.xlsx" -v /caminho/local.xls
 
 ```
 
----
+
 
