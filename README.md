@@ -1,4 +1,4 @@
-=======
+
 # 🎓 Monitor de Risco Escolar — Dashboard + Machine Learning
 
 Este projeto foi desenvolvido para o **Datathon Educacional** e tem como objetivo aplicar **Ciência de Dados e Machine Learning na identificação precoce de risco de defasagem escolar**.
