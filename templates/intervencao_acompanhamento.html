@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block back_button %}
+<div class="page-header-flex">
+    <div class="page-header-left">
+        <h1 class="page-title">Intervenção - Acompanhamento</h1>
+        <div class="page-subtitle">
+            Critério: alunos com Risco Muito Alto (casos críticos)
+        </div>
+    </div>
+
+        <a class="btn-back" href="{{ url_for('dashboard', sheet=session.get('current_sheet')) }}">← Voltar</a>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<div class="table-card">
+  <div class="table-header">
+    <h2>Alunos alvo ({{ alunos|length }})</h2>
+    <form method="post">
+      <button class="btn btn-warning" type="submit">Confirmar Envio de Alerta</button>
+    </form>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Aluno</th>
+        <th>Turma</th>
+        <th>Média</th>
+        <th>Risco</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in alunos %}
+      <tr>
+        <td>{{ a.nome }}</td>
+        <td>{{ a.turma }}</td>
+        <td class="media {{ a.media_classe }}">{{ a.media }}</td>
+        {% set risk_class = "risk-" + (a.risco | lower | replace(" ", "-")) %}
+        <td><span class="risk-tag {{ risk_class }}">{{ a.risco }}</span></td>
+        <td><a class="btn btn-outline" href="/aluno/{{ a.ra }}?sheet={{ sheet }}">Ver Detalhes</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

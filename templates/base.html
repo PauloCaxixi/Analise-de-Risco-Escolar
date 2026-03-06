@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>{% block title %}Monitor de Risco{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/static/css/style.css">
+
+  <!-- Icons -->
+  <link href="https://unpkg.com/feather-icons/dist/feather.css" rel="stylesheet">
+</head>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+
+    const input = document.getElementById("global-search");
+    const resultBoxId = "live-search-results";
+
+    if (!input) return;
+
+    // cria box de resultados
+    let box = document.createElement("div");
+    box.id = resultBoxId;
+    box.style.position = "absolute";
+    box.style.background = "white";
+    box.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+    box.style.borderRadius = "8px";
+    box.style.padding = "10px";
+    box.style.display = "none";
+    box.style.zIndex = "9999";
+    input.parentElement.appendChild(box);
+
+    // evento de digitação
+    input.addEventListener("input", function() {
+        let q = input.value.trim();
+
+        if (q.length < 2) {
+            box.style.display = "none";
+            return;
+        }
+
+        let sheetSelect = document.querySelector("select[name='sheet']");
+        let sheet = sheetSelect ? sheetSelect.value : "PEDE2024";
+
+        fetch(`/api/search?sheet=${sheet}&q=` + encodeURIComponent(q))
+            .then(r => r.json())
+            .then(data => {
+                box.innerHTML = "";
+
+                if (data.results.length === 0) {
+                    box.style.display = "none";
+                    return;
+                }
+
+                data.results.forEach(r => {
+                    let item = document.createElement("div");
+                    item.style.padding = "6px 8px";
+                    item.style.cursor = "pointer";
+                    item.style.borderBottom = "1px solid #f0f0f0";
+
+                    item.innerHTML = `
+                    <strong>${r.nome}</strong> — ${r.turma}
+                    <br>
+                    <span style="font-size:12px;color:#888;">
+                    RA: ${r.ra} | Risco: ${r.risco}
+                    </span>
+                    `;
+
+                    item.onclick = function() {
+                        window.location.href = `/aluno/${r.ra}?sheet=${document.querySelector("select[name='sheet']").value}`;
+                    };
+
+                    box.appendChild(item);
+                });
+
+                // posicionar a caixa
+                let rect = input.getBoundingClientRect();
+                box.style.width = rect.width + "px";
+                box.style.top = (input.offsetTop + input.offsetHeight + 5) + "px";
+                box.style.left = input.offsetLeft + "px";
+                box.style.display = "block";
+            });
+    });
+
+    // fechar ao clicar fora
+    document.addEventListener("click", function(e) {
+        if (!input.contains(e.target))
+            box.style.display = "none";
+    });
+
+});
+</script>
+
+<body>
+  <div class="layout">
+
+    <!-- =========================
+         MENU LATERAL
+    ========================== -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <span class="logo-icon">✔</span>
+          <div class="logo-text">
+            <strong>Monitor de Risco</strong>
+            <small>Prevenção de Reprovação</small>
+          </div>
+        </div>
+      </div>
+
+      <nav class="menu">
+        <a class="menu-item active" href="/dashboard">
+          <i data-feather="home"></i>
+          <span>Dashboard</span>
+        </a>
+
+        <a class="menu-item" href="/alertas">
+          <i data-feather="bell"></i>
+          <span>Alertas Prioritários</span>
+          <span class="badge">{{ alertas_count }}</span>
+        </a>
+
+        <a class="menu-item" href="/evolucao">
+          <i data-feather="trending-up"></i>
+          <span>Evolução</span>
+        </a>
+
+        <a class="menu-item" href="/relatorios">
+          <i data-feather="file-text"></i>
+          <span>Relatórios</span>
+        </a>
+
+        <a class="menu-item" href="/configuracoes">
+          <i data-feather="settings"></i>
+          <span>Configurações</span>
+        </a>
+      </nav>
+
+        <a class="menu-item" href="/api-docs">
+          <i data-feather="code"></i>
+          <span>API</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <p class="help-text">Precisa de ajuda?</p>
+        <a class="support-btn" href="/suporte">Fale com o Suporte</a>
+      </div>
+    </aside>
+
+    <!-- =========================
+         CONTEÚDO PRINCIPAL
+    ========================== -->
+    <main class="main">
+
+      <!-- ===== TOPO ===== -->
+      <header class="topbar">
+        <div class="search-box">
+          <i data-feather="search"></i>
+          <input
+            type="text"
+            placeholder="Buscar aluno, turma ou disciplina…"
+            id="global-search"
+          />
+        </div>
+
+        <div class="topbar-right">
+          <form class="inline-form" method="get" action="/dashboard">
+            <input type="hidden" name="escola" value="{{ escola_nome }}">
+            <input type="hidden" name="q" value="{{ q }}">
+            </select>
+          </form>
+
+          <!-- aqui continua: Escola / notificações / usuário -->
+        </div>
+
+        <a class="menu-item" href="/api-docs">
+          <i data-feather="code"></i>
+          <span>API</span>
+        </a>
+
+      </header>
+
+      <!-- ===== CONTEÚDO DINÂMICO ===== -->
+      <section class="content">
+        {% block back_button %}{% endblock %}
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <div class="card" style="margin:14px 0; padding:14px 16px; border-left:6px solid #22c55e;">
+              {% for m in messages %}
+                <div style="font-weight:900;">{{ m }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/feather-icons"></script>
+  <script>
+    feather.replace();
+  </script>
+</body>
+</html>

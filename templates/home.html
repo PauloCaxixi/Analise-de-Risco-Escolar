@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+
+{% block content %}
+<div class="page-header">
+  <h1>
+    Dashboard - Alunos com <span class="highlight-danger">Alto Risco de Reprovação</span>
+    <span class="muted" style="font-size:14px; font-weight:700;">
+      (análise histórica 2022–2024)
+    </span>
+  </h1>
+</div>
+
+<!-- CARDS -->
+<div class="cards-row">
+  <div class="card card-danger">
+    <div class="card-header">
+      <span class="card-title">Alunos em Alto Risco</span>
+    </div>
+    <div class="card-body">
+      <div class="card-value">{{ indicadores.alto_risco.total }}</div>
+      <div class="card-subtitle">{{ indicadores.alto_risco.percentual }}% do total</div>
+    </div>
+  </div>
+
+  <div class="card card-warning">
+    <div class="card-header">
+      <span class="card-title">Risco Médio</span>
+    </div>
+    <div class="card-body">
+      <div class="card-value">{{ indicadores.medio_risco.total }}</div>
+      <div class="card-subtitle">{{ indicadores.medio_risco.percentual }}% do total</div>
+    </div>
+  </div>
+
+  <div class="card card-success">
+    <div class="card-header">
+      <span class="card-title">Alunos Regulares</span>
+    </div>
+    <div class="card-body">
+      <div class="card-value">{{ indicadores.regulares.total }}</div>
+      <div class="card-subtitle">{{ indicadores.regulares.percentual }}% do total</div>
+    </div>
+  </div>
+
+
+  <div class="card card-gauge">
+    <div class="card-header">
+      <span class="card-title">Média Geral da Escola</span>
+    </div>
+    <div class="card-body">
+      <div class="gauge">
+        <div class="gauge-value">{{ media_geral }}</div>
+        <div class="gauge-subtitle">/ 10</div>
+      </div>
+      <div class="card-subtitle">média geral de INDE 22</div>
+    </div>
+  </div>
+</div>
+
+<!-- GRID (tabela + cards laterais) -->
+<div class="main-grid">
+
+  <!-- TABELA PRINCIPAL -->
+  <div class="table-card">
+    <div class="table-header">
+      <h2>Lista de <span class="highlight-danger">Alunos em Alto Risco</span></h2>
+      <a class="btn btn-danger" href="/export?sheet={{ sheet }}">
+        Exportar Relatório
+      </a>
+    </div>
+
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Aluno</th>
+          <th>Turma</th>
+          <th>Média</th>
+          <th>Risco</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in alunos_alto_risco %}
+        <tr>
+          <td>{{ a.nome }}</td>
+          <td>{{ a.turma }}</td>
+          <td class="media {{ a.media_classe }}">{{ a.media }}</td>
+          <td>
+            {% set risk_class = "risk-" + (a.risco | lower | replace(" ", "-")) %}
+            <span class="risk-tag {{ risk_class }}">{{ a.risco }}</span>
+          </td>
+          <td>
+            <a class="btn btn-outline" href="/aluno/{{ a.ra }}?sheet={{ sheet }}">Ver Detalhes</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="table-footer">
+      <a class="btn btn-outline" href="/alunos-risco?sheet={{ sheet }}&escola=Todas&q=">
+        Ver Todos os Alunos ({{ indicadores.total }})
+      </a>
+    </div>
+  </div>
+
+  <!-- COLUNA DIREITA -->
+  <div class="side-cards">
+
+    <div class="card">
+      <div class="card-header">
+        <h3>Filtrar por Disciplina</h3>
+      </div>
+      <div class="card-body">
+        <div class="disciplina">
+          <span>Matemática</span><strong>{{ disciplinas.matematica }} alunos</strong>
+        </div>
+        <div class="disciplina">
+          <span>Português</span><strong>{{ disciplinas.portugues }} alunos</strong>
+        </div>
+        <div class="disciplina">
+          <span>Inglês</span><strong>{{ disciplinas.ingles }} alunos</strong>
+        </div>
+
+        <div style="margin-top:12px;">
+          <button class="btn btn-outline full-width" type="button">Ver Todas as Disciplinas</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>Tendência Mensal</h3>
+      </div>
+      <div class="card-body">
+        <div class="muted" style="font-weight:800; color:#64748b; margin-bottom:10px;">
+          Média Geral vs Alunos em Risco (Pedra 20/21/22)
+        </div>
+
+        <div id="trend" style="height:220px;"></div>
+
+        <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+        <script>
+        fetch(`/api/tendencia?sheet={{ sheet }}`)
+          .then(res => res.json())
+          .then(data => {
+            const x = data.labels;
+
+            Plotly.newPlot("trend", [
+              {
+                x,
+                y: data.media,
+                mode: "lines+markers",
+                name: "Média Geral"
+              },
+              {
+                x,
+                y: data.risco,
+                mode: "lines+markers",
+                name: "Alunos em Risco"
+              }
+            ], {
+              margin: {l:30,r:10,t:10,b:30},
+              height: 220,
+              showlegend: true
+            }, {displayModeBar:false});
+          });
+        </script>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>Próximos Prazos</h3>
+      </div>
+      <div class="card-body">
+        {% for p in proximos_prazos %}
+          <div class="prazo">
+            <strong>{{ p.titulo }}</strong>
+            <span>{{ p.data }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- AÇÕES RECOMENDADAS -->
+<div class="actions-section">
+  <h2>Ações Recomendadas</h2>
+
+    <div class="card card-warning">
+      <div class="card-header">
+        <h3>Acompanhamento</h3>
+      </div>
+      <div class="card-body">
+        <div class="card-subtitle"><strong>{{ acoes.acompanhamento }}</strong> alunos inativos</div>
+        <div style="margin-top:12px;">
+          <a class="btn btn-warning" href="/intervencoes/acompanhamento?sheet={{ sheet }}">Enviar Alerta</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-success">
+      <div class="card-header">
+        <h3>Reuniões de Pais</h3>
+      </div>
+      <div class="card-body">
+        <div class="card-subtitle"><strong>{{ acoes.reuniao_pais }}</strong> alunos críticos</div>
+        <div style="margin-top:12px;">
+          <a class="btn btn-success" href="/intervencoes/reuniao-pais?sheet={{ sheet }}">Agendar</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
