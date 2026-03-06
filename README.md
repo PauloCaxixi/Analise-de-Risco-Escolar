@@ -1,287 +1,478 @@
-# 🎓 Dashboard Educacional — Passos Mágicos (Datathon)
+# 🎓 Monitor de Risco Escolar — Dashboard + Machine Learning
 
-Este projeto é uma solução de **Inteligência de Dados e Monitoramento Pedagógico** desenvolvida para o Datathon.
-O sistema processa dados longitudinais de alunos, aplica modelos de **Machine Learning para prever riscos de defasagem** e oferece uma **interface de gestão pedagógica** para tomada de decisão rápida.
+Este projeto foi desenvolvido para o **Datathon Educacional** e tem como objetivo aplicar **Ciência de Dados e Machine Learning na identificação precoce de risco de defasagem escolar**.
 
----
+O sistema analisa dados educacionais históricos (2022–2024), calcula indicadores pedagógicos e utiliza um **modelo de Machine Learning para prever risco de reprovação**, apresentando os resultados em um **dashboard interativo para gestores educacionais**.
 
----
-
-# 📈 Objetivo do Projeto
-
-Este projeto busca aplicar **Ciência de Dados na Educação**, permitindo:
-
-* identificar alunos em risco
-* antecipar defasagens escolares
-* apoiar decisões pedagógicas
-* orientar intervenções educacionais
-
-Tudo através de **dados longitudinais e inteligência artificial**.
+Além do dashboard, o projeto também expõe uma **API REST para consulta e predição de risco de alunos**.
 
 ---
 
-# 🛠️ Arquitetura do Sistema (app.py)
+# 🎯 Objetivo do Projeto
 
-O núcleo da aplicação foi construído em **Flask** e está dividido em camadas lógicas para garantir **robustez, legibilidade e escalabilidade**.
+Aplicar **Data Science na Educação** para apoiar decisões pedagógicas baseadas em dados.
 
----
+O sistema permite:
 
-# 1️⃣ Bootstrap e Configuração
-
-O código utiliza **Pathlib** para garantir que o projeto rode em qualquer sistema operacional (**Windows / Linux / MacOS**) sem problemas de caminho.
-
-O sistema:
-
-* Define o `REPO_ROOT`
-* Injeta as pastas do projeto no `sys.path`
-* Permite importar módulos internos de `src/`
-
-Isso evita problemas comuns de importação quando o projeto roda fora da raiz.
+* identificar alunos em risco de reprovação
+* antecipar defasagens educacionais
+* analisar evolução longitudinal de desempenho
+* orientar intervenções pedagógicas
+* apoiar coordenadores e gestores escolares
 
 ---
 
-# 2️⃣ Pipeline de Dados (Normalização)
+# 🧠 Arquitetura do Sistema
 
-Antes de qualquer análise ou predição, os dados passam por um pipeline de limpeza.
+O sistema é dividido em quatro camadas principais:
 
-### `_standardize_columns`
+### 1️⃣ Camada de Dados
 
-Responsável por padronizar nomes de colunas:
+Responsável por leitura, limpeza e preparação dos dados educacionais.
 
-* remove acentos
-* remove espaços
-* converte para **snake_case**
-* garante compatibilidade com o modelo
+### 2️⃣ Camada de Machine Learning
 
-Exemplo:
+Treinamento do modelo e geração de predições de risco.
+
+### 3️⃣ Camada de Aplicação
+
+Dashboard interativo construído em **Flask**.
+
+### 4️⃣ Camada de API
+
+Endpoints REST para consulta e predição de risco de alunos.
+
+---
+
+# 📁 Estrutura do Projeto
+
+Estrutura real do repositório:
 
 ```
-"Nota Matemática" → nota_matematica
+Analise-de-Risco-Escolar
+│
+├── app
+│   ├── metadata.json
+│   ├── model.joblib
+│   ├── pipeline.joblib
+│   └── preprocessor.joblib
+│
+├── dashboard
+│   ├── data
+│   │   ├── processed
+│   │   │   └── intervencoes_plano_reforco.csv
+│   │   │
+│   │   └── raw
+│   │       └── BASE DE DADOS PEDE 2024 - DATATHON.xlsx
+│   │
+│   ├── app.py
+│   └── drift_dashboard.py
+│
+├── src
+│   ├── services
+│   │   └── tendencia.py
+│   │
+│   ├── drift.py
+│   ├── features.py
+│   └── train.py
+│
+├── static
+│   └── css
+│       └── style.css
+│
+├── templates
+│   ├── aluno_detalhe.html
+│   ├── aluno_risco.html
+│   ├── api_docs.html
+│   ├── base.html
+│   ├── home.html
+│   ├── intervencao_acompanhamento.html
+│   └── intervencao_reuniao_pais.html
+│
+├── tests
+│   ├── conftest.py
+│   ├── test_api_predict.py
+│   ├── test_app_aluno_detalhe.py
+│   ├── test_app_dashboard.py
+│   └── test_routes_extra.py
+│
+├── Dockerfile
+├── Makefile
+├── pytest.ini
+├── requirements.txt
+└── README.md
 ```
 
 ---
 
-### `_coerce_numeric`
+# 📊 Dataset Utilizado
 
-Transforma colunas críticas em valores numéricos:
-
-* Notas
-* INDE
-* Pedras
-
-Se houver textos como:
+O sistema utiliza uma planilha contendo dados educacionais estruturados em abas anuais:
 
 ```
-"Mantido na Fase"
+PEDE2022
+PEDE2023
+PEDE2024
 ```
 
-o sistema converte para:
+Localização do dataset:
 
 ```
-NaN
+dashboard/data/raw/BASE DE DADOS PEDE 2024 - DATATHON.xlsx
 ```
 
-Isso evita quebra nos cálculos matemáticos.
+Cada linha representa um aluno com informações como:
+
+* RA
+* Nome
+* Turma
+* INDE (Índice de Desenvolvimento Educacional)
+* Pedras pedagógicas
+* Notas (Matemática, Português, Inglês)
+* Indicadores educacionais (IEG, IPS, IAA, IDA, IPV, IAN)
+
+Esses dados permitem realizar **análises longitudinais de desempenho escolar**.
 
 ---
 
-### `_read_xlsx_sheet`
+# ⚙️ Pipeline de Processamento de Dados
 
-Camada de **IO controlado** responsável por:
+Antes da análise ou predição, os dados passam por um pipeline de preparação.
 
-* Ler o arquivo `.xlsx`
-* Validar se o arquivo existe
-* Validar se a aba existe
+### Leitura de dados
 
-Abas suportadas:
+Função responsável:
 
-* 2022
-* 2023
-* 2024
+```
+_read_xlsx_sheet()
+```
 
-Caso a aba não exista, o sistema gera erro controlado.
+Localização:
+
+```
+dashboard/app.py
+```
+
+Responsável por:
+
+* carregar o dataset
+* validar a existência do arquivo
+* validar a aba solicitada
 
 ---
 
-# 3️⃣ Motor de Predição de Risco
+### Padronização de colunas
 
-O sistema opera em modo **Híbrido**.
+Função:
 
-## 🧠 Modo ML (Oficial)
+```
+_standardize_columns()
+```
 
-Carrega os arquivos:
+Localização:
+
+```
+src/features.py
+```
+
+Responsável por:
+
+* padronizar nomes de colunas
+* remover inconsistências de formatação
+* garantir compatibilidade com o modelo
+
+---
+
+### Conversão numérica
+
+Função:
+
+```
+_coerce_numeric()
+```
+
+Converte colunas críticas para formato numérico, evitando erros em cálculos estatísticos e no modelo.
+
+---
+
+# 🤖 Modelo de Machine Learning
+
+O modelo é treinado utilizando **Scikit-learn** e armazenado no diretório:
+
+```
+app/
+```
+
+Arquivos gerados:
 
 ```
 model.joblib
 preprocessor.joblib
-```
-
-Utiliza:
-
-```
-predict_proba()
-```
-
-para calcular a **probabilidade de defasagem educacional futura** com base nas features definidas em:
-
-```
+pipeline.joblib
 metadata.json
 ```
 
+O pipeline contém:
+
+* tratamento de dados
+* imputação de valores faltantes
+* transformação de features
+* modelo de classificação
+
 ---
 
-## 🛟 Modo Fallback (Heurístico)
+# 🧠 Predição de Risco
 
-Caso o modelo ainda não tenha sido treinado, o sistema ativa automaticamente:
+A função principal de predição é:
+
+```
+_predict_risk_with_model()
+```
+
+Fluxo de predição:
+
+```
+dados do aluno
+        ↓
+preprocessor.transform()
+        ↓
+model.predict_proba()
+        ↓
+score de risco
+```
+
+O score varia entre **0 e 1**.
+
+Classificação utilizada:
+
+| Score  | Classificação |
+| ------ | ------------- |
+| ≥ 0.85 | Muito Alto    |
+| ≥ 0.70 | Alto          |
+| ≥ 0.50 | Médio         |
+| < 0.50 | Regular       |
+
+---
+
+# 🛟 Sistema de Fallback
+
+Caso o modelo não esteja disponível, o sistema ativa automaticamente:
 
 ```
 _predict_risk_fallback()
 ```
 
-Essa função calcula o risco com base em:
+Este método estima risco com base em:
 
 * INDE
-* Médias atuais
-* Histórico de evolução
+* médias das disciplinas
+* indicadores educacionais
 
-Isso garante que **o dashboard nunca fique vazio**.
+Isso garante que o dashboard continue funcionando mesmo sem modelo treinado.
 
 ---
 
-# 4️⃣ Inteligência Artificial Pedagógica
+# 📊 Dashboard Educacional
 
-O sistema possui um motor de análise pedagógica automatizado.
+O dashboard apresenta indicadores importantes para gestão pedagógica:
 
-### `gerar_recomendacao_ia`
+* número de alunos em alto risco
+* risco médio
+* alunos regulares
+* média geral da escola
+* disciplinas com maior dificuldade
+* tendência histórica de desempenho
 
-Analisa:
-
-* Pedras
-* Risco
-* Notas
-* Perfil psicológico
-
-E gera um **parecer textual automático** para o coordenador pedagógico.
-
-Exemplo de saída:
+Principais páginas:
 
 ```
-Aluno apresenta risco moderado de defasagem.
-Recomendado reforço em matemática e acompanhamento socioemocional.
+/dashboard
+/aluno/<ra>
+/alunos-risco
 ```
 
 ---
 
-### Detecção de Estagnação
+# 📡 API REST
 
-A função:
+O sistema expõe endpoints REST para integração com outros sistemas.
+
+### Health Check
 
 ```
-detectar_alunos_sem_progresso()
+GET /api/health
 ```
 
-cruza os dados de:
-
-* 2022
-* 2023
-* 2024
-
-Para detectar alunos que:
-
-* não evoluíram de pedra
-* mantiveram notas estagnadas por 2 anos
-
-Esses casos são destacados no dashboard para intervenção.
+Retorna status da aplicação.
 
 ---
 
-# 🚀 Como Executar
+### Buscar aluno
 
-## 1️⃣ Instalar dependências
+```
+GET /api/aluno/<ra>
+```
 
-```bash
+Retorna informações completas de um aluno.
+
+---
+
+### Predição de risco
+
+```
+POST /api/predict
+```
+
+Entrada:
+
+```json
+{
+  "RA": "12345"
+}
+```
+
+Saída:
+
+```json
+{
+  "ra": "12345",
+  "risk_score": 0.72,
+  "risk_label": "Alto"
+}
+```
+
+---
+
+### Predição em lote
+
+```
+POST /api/predict-batch
+```
+
+Entrada:
+
+```json
+[
+  {"RA": "12345"},
+  {"RA": "67890"}
+]
+```
+
+---
+
+### Tendência histórica
+
+```
+GET /api/tendencia
+```
+
+Retorna dados para gráficos de evolução histórica.
+
+---
+
+# 🧪 Testes Automatizados
+
+Os testes estão localizados em:
+
+```
+tests/
+```
+
+Principais testes:
+
+```
+test_api_predict.py
+test_app_dashboard.py
+test_app_aluno_detalhe.py
+```
+
+Para executar os testes:
+
+```
+pytest
+```
+
+---
+
+# 🚀 Como Executar o Projeto
+
+### 1️⃣ Instalar dependências
+
+```
 pip install -r requirements.txt
 ```
 
-# 🧠 Tecnologias Utilizadas
+---
+
+### 2️⃣ Garantir que o dataset esteja em
+
+```
+dashboard/data/raw/BASE DE DADOS PEDE 2024 - DATATHON.xlsx
+```
+
+---
+
+### 3️⃣ Executar o dashboard
+
+Dentro da pasta `dashboard`:
+
+```
+python app.py
+```
+
+A aplicação iniciará em:
+
+```
+http://localhost:5000
+```
+
+---
+
+# 🧠 Treinamento do Modelo
+
+Para treinar o modelo de Machine Learning:
+
+```
+python src/train.py
+```
+
+Os arquivos gerados serão salvos em:
+
+```
+app/
+```
+
+Arquivos gerados:
+
+```
+model.joblib
+preprocessor.joblib
+pipeline.joblib
+metadata.json
+```
+
+---
+
+# 🧰 Tecnologias Utilizadas
 
 * Python
 * Flask
 * Pandas
 * Scikit-learn
 * Joblib
-* Machine Learning
-* Data Engineering
+* HTML
+* CSS
+* JavaScript
+* Pytest
 
 ---
 
-### 2. Configuração do Banco de Dados
+# 🎯 Resultado
 
-O sistema lê o caminho da planilha através de variáveis de ambiente:
+A solução permite:
 
-```powershell
-# Windows
-$env:PEDE_XLSX_PATH="dashboard\data\raw\BASE DE DADOS PEDE 2024 - DATATHON.xlsx"
-# Linux/Mac
-export PEDE_XLSX_PATH="dashboard/data/raw/BASE DE DADOS PEDE 2024 - DATATHON.xlsx
-
-```
-
-### 3. Treinamento do Modelo
-
-Para que o Dashboard use Machine Learning em vez da heurística:
-
-```bash
-python -m src.train --xlsx "BASE DE DADOS PEDE 2024 - DATATHON.xlsx" --out "dashboard\data\raw"
-
-```
-
----
-
-## 📡 API Reference (Endpoints)
-
-| Rota | Método | Descrição |
-| --- | --- | --- |
-| `/dashboard` | `GET` | Interface principal com indicadores e filtros. |
-| `/aluno/<ra>` | `GET` | Ficha detalhada do aluno com diagnóstico de IA. |
-| `/predict` | `POST` | **Endpoint Datathon**: Recebe JSON com dados do aluno e retorna score/classe de risco. |
-| `/export` | `GET` | Gera um CSV (com BOM para Excel) dos alunos em risco. |
-| `/api/tendencia` | `GET` | Retorna dados JSON para os gráficos de evolução histórica. |
-
----
-
-## 📊 Lógica de Negócio e Dashboards
-
-### Filtros Inteligentes
-
-O dashboard permite filtrar por **Instituição de Ensino** e **Busca Global** (Nome, RA ou Turma). Se uma escola for selecionada e não houver dados na aba atual, o sistema faz um fallback automático para "Todas as Escolas", evitando telas de erro 404.
-
-### Réguas de Risco (Thresholds)
-
-As cores e alertas do sistema seguem a lógica:
-
-* 🔴 **Muito Alto**: Score ≥ 0.85 ou INDE < 4.0
-* 🟠 **Alto**: Score ≥ 0.70 ou INDE < 5.5
-* 🟡 **Médio**: Score ≥ 0.50 ou INDE < 6.5
-* 🟢 **Regular**: Score < 0.50 ou INDE ≥ 6.5
-
----
-
-## 🐳 Docker
-
-Para rodar em container, utilize o `Dockerfile` incluso:
-
-```bash
-docker build -t pm-dash .
-docker run -p 5000:5000 -e PEDE_XLSX_PATH="dashboard/data/raw/BASE DE DADOS PEDE 2024 - DATATHON.xlsx" -v /caminho/local.xlsx:/app/data.xlsx pm-dash
-
-```
-
----
-
-**Nota:** Este projeto foi desenvolvido focado em **Recall**, garantindo que nenhum aluno com alta probabilidade de defasagem passe despercebido pela equipe pedagógica.
-
-```
-
-
+* monitorar risco de reprovação escolar
+* identificar padrões educacionais
+* apoiar decisões pedagógicas
+* aplicar Machine Learning em dados educacionais reais
 
