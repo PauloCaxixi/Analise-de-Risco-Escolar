@@ -984,116 +984,205 @@ def export_relatorio() -> Response:
 
 @app.get("/aluno/<ra>")
 def aluno_detalhe(ra: str) -> Any:
+
     sheet = request.args.get("sheet", DEFAULT_SHEET)
 
-    # 1. Carga e Padronização
-    df_raw = _read_xlsx_sheet(DATA_XLSX_PATH, sheet)
-    df = _standardize_columns(df_raw)
+    # 1️⃣ Carga e padronização
+    df = _load_df_with_risk(sheet, None, None)
+
     df = _coerce_numeric(
         df,
         [
-            "Matem", "Portug", "Inglês", "INDE 22", 
+            "Matem", "Portug", "Inglês", "INDE 22",
             "Pedra 20", "Pedra 21", "Pedra 22",
             "IEG", "IPS", "IAA", "IDA", "IPV", "IAN",
         ],
     )
 
-    # 2. Localização do Aluno
+    # 2️⃣ Localizar aluno
     ra_norm = str(ra).strip()
+
     row_df = df[df["RA"].astype(str).str.strip() == ra_norm].copy()
 
-    # Validação imediata: se não achar o aluno, para aqui
     if row_df.empty:
         return abort(404, description=f"Aluno não encontrado. RA={ra_norm}")
 
-    # Força a existência de colunas para o Modelo (evita Warnings de Imputer)
+    # garantir colunas do modelo
     cols_modelo = ["Pedra 20", "Pedra 21", "Pedra 22", "Rec Av1", "Rec Av2", "Rec Av3", "Rec Av4"]
+
     for col in cols_modelo:
         if col not in row_df.columns:
             row_df[col] = np.nan
 
-    # Pega a linha do aluno para cálculos individuais
     row = row_df.iloc[0]
 
-    # 3. Predição de Risco (Modelo ou Fallback)
+    # 3️⃣ Predição de risco
     pre, model, metadata = _load_model_bundle()
+
     risk_tipo = "risco_fallback"
-    
+
     try:
+
         if pre is not None and model is not None:
+
             feature_cols = metadata.get("feature_columns")
+
             if isinstance(feature_cols, list) and feature_cols:
-                score_s, label_s = _predict_risk_with_model(row_df, pre, model, [str(c) for c in feature_cols])
+
+                score_s, label_s = _predict_risk_with_model(
+                    row_df,
+                    pre,
+                    model,
+                    [str(c) for c in feature_cols],
+                )
+
                 risk_tipo = "risco_futuro"
+
             else:
+
                 score_s, label_s = _predict_risk_fallback(row_df)
+
         else:
+
             score_s, label_s = _predict_risk_fallback(row_df)
+
     except Exception:
+
         score_s, label_s = _predict_risk_fallback(row_df)
 
     risk_score = float(score_s.iloc[0]) if not score_s.empty else 0.0
     risco = str(label_s.iloc[0]) if not label_s.empty else "Regular"
 
-    # 4. Formatação de Dados para o Template
+    # 4️⃣ Média
     media = _calc_media_disciplinas(row)
+
     media_fmt = f"{media:.1f}".replace(".", ",") if pd.notna(media) else "-"
 
+    # 5️⃣ Payload aluno (corrigido)
     aluno_payload = {
+
         "ra": ra_norm,
         "nome": str(row.get("Nome", "Não Informado")).strip(),
         "turma": str(row.get("Turma", "-")).strip(),
+
         "risk_type": risk_tipo,
-        "risk_score": f"{risk_score:.2f}".replace(".", ","),
+        "risk_score": risk_score,
         "risco": risco,
+
         "media": media_fmt,
-        "inde_22": (f"{float(row.get('INDE 22')):.1f}".replace(".", ",") if pd.notna(row.get("INDE 22")) else "-"),
-        "ieg": (f"{float(row.get('IEG')):.2f}".replace(".", ",") if pd.notna(row.get("IEG")) else "-"),
-        "matem": (f"{float(row.get('Matem')):.1f}".replace(".", ",") if pd.notna(row.get("Matem")) else "-"),
-        "portug": (f"{float(row.get('Portug')):.1f}".replace(".", ",") if pd.notna(row.get("Portug")) else "-"),
-        "ingles": (f"{float(row.get('Inglês')):.1f}".replace(".", ",") if pd.notna(row.get("Inglês")) else "-"),
-        "iaa": (f"{float(row.get('IAA')):.2f}".replace(".", ",") if pd.notna(row.get("IAA")) else "-"),
-        "ips": (f"{float(row.get('IPS')):.2f}".replace(".", ",") if pd.notna(row.get("IPS")) else "-"),
-        "ida": (f"{float(row.get('IDA')):.2f}".replace(".", ",") if pd.notna(row.get("IDA")) else "-"),
-        "ipv": (f"{float(row.get('IPV')):.2f}".replace(".", ",") if pd.notna(row.get("IPV")) else "-"),
-        "ian": (f"{float(row.get('IAN')):.2f}".replace(".", ",") if pd.notna(row.get("IAN")) else "-"),
-        "pedra_20": (str(row.get("Pedra 20")) if pd.notna(row.get("Pedra 20")) else "-"),
-        "pedra_21": (str(row.get("Pedra 21")) if pd.notna(row.get("Pedra 21")) else "-"),
-        "pedra_22": (str(row.get("Pedra 22")) if pd.notna(row.get("Pedra 22")) else "-"),
-        "rec_psicologia": (str(row.get("Rec Psicologia", "")).strip() or "-"),
-        "indicado": ("Sim" if _truthy(row.get("Indicado")) else "Não"),
-        "rec_av1": (str(row.get("Rec Av1", "")).strip() or "-"),
-        "rec_av2": (str(row.get("Rec Av2", "")).strip() or "-"),
-        "rec_av3": (str(row.get("Rec Av3", "")).strip() or "-"),
-        "rec_av4": (str(row.get("Rec Av4", "")).strip() or "-"),
+
+        "inde_22": (
+            f"{float(row.get('INDE 22')):.1f}".replace(".", ",")
+            if pd.notna(row.get("INDE 22"))
+            else "-"
+        ),
+
+        "ieg": (
+            f"{float(row.get('IEG')):.2f}".replace(".", ",")
+            if pd.notna(row.get("IEG"))
+            else "-"
+        ),
+
+        "matem": (
+            f"{float(row.get('Matem')):.1f}".replace(".", ",")
+            if pd.notna(row.get("Matem"))
+            else "-"
+        ),
+
+        "portug": (
+            f"{float(row.get('Portug')):.1f}".replace(".", ",")
+            if pd.notna(row.get("Portug"))
+            else "-"
+        ),
+
+        "ingles": (
+            f"{float(row.get('Inglês')):.1f}".replace(".", ",")
+            if pd.notna(row.get("Inglês"))
+            else "-"
+        ),
+
+        "iaa": (
+            f"{float(row.get('IAA')):.2f}".replace(".", ",")
+            if pd.notna(row.get("IAA"))
+            else "-"
+        ),
+
+        "ips": (
+            f"{float(row.get('IPS')):.2f}".replace(".", ",")
+            if pd.notna(row.get("IPS"))
+            else "-"
+        ),
+
+        "ida": (
+            f"{float(row.get('IDA')):.2f}".replace(".", ",")
+            if pd.notna(row.get("IDA"))
+            else "-"
+        ),
+
+        "ipv": (
+            f"{float(row.get('IPV')):.2f}".replace(".", ",")
+            if pd.notna(row.get("IPV"))
+            else "-"
+        ),
+
+        "ian": (
+            f"{float(row.get('IAN')):.2f}".replace(".", ",")
+            if pd.notna(row.get("IAN"))
+            else "-"
+        ),
+
+        "pedra_20": str(row.get("Pedra 20", "-")),
+        "pedra_21": str(row.get("Pedra 21", "-")),
+        "pedra_22": str(row.get("Pedra 22", "-")),
+
+        "rec_psicologia": str(row.get("Rec Psicologia", "")).strip() or "-",
+
+        "indicado": "Sim" if _truthy(row.get("Indicado")) else "Não",
+
+        "rec_av1": str(row.get("Rec Av1", "")).strip() or "-",
+        "rec_av2": str(row.get("Rec Av2", "")).strip() or "-",
+        "rec_av3": str(row.get("Rec Av3", "")).strip() or "-",
+        "rec_av4": str(row.get("Rec Av4", "")).strip() or "-",
     }
 
-    # 5. Lógica de Recomendações
+    # 6️⃣ Recomendações
     acomp_flags = []
-    if pd.notna(row.get("IEG")): acomp_flags.append(float(row.get("IEG")) < 0.4)
-    if pd.notna(row.get("IPS")): acomp_flags.append(float(row.get("IPS")) < 0.4)
-    
+
+    if pd.notna(row.get("IEG")):
+        acomp_flags.append(float(row.get("IEG")) < 0.4)
+
+    if pd.notna(row.get("IPS")):
+        acomp_flags.append(float(row.get("IPS")) < 0.4)
+
     rec_psico = str(row.get("Rec Psicologia", "")).strip().lower()
-    acomp_flags.append(bool(rec_psico and rec_psico != "nan" and rec_psico != ""))
+
+    acomp_flags.append(bool(rec_psico and rec_psico != "nan"))
 
     reuniao_pais = (risco in ["Alto", "Muito Alto"]) and _truthy(row.get("Indicado"))
 
     recomendacoes = {
-        "acompanhamento": "Sinal para acompanhamento" if any(acomp_flags) else "Sem sinal crítico de acompanhamento",
-        "reunioes_pais": "Aluno crítico indicado" if reuniao_pais else "Sem critério para reunião de pais",
+        "acompanhamento": "Sinal para acompanhamento"
+        if any(acomp_flags)
+        else "Sem sinal crítico de acompanhamento",
+
+        "reunioes_pais": "Aluno crítico indicado"
+        if reuniao_pais
+        else "Sem critério para reunião de pais",
     }
 
-    # 6. Contexto Global e Dashboard
+    # 7️⃣ Contexto global
     ctx_badge = _build_dashboard_context(df)
+
     alertas_count = int(ctx_badge.get("alertas_count", 0))
+
     escola_nome = str(row.get("Instituição de ensino", "Todas")).strip() or "Todas"
 
-    # User info da sessão
     usuario_nome = session.get("usuario_nome", "Prof. Ana")
     usuario_cargo = session.get("usuario_cargo", "Coordenadora Pedagógica")
 
-    # Diagnóstico de IA
     recomendacao_ia = gerar_recomendacao_ia(row)
+
+    analise = analisar_evolucao_aluno(ra)
 
     return render_template(
         "aluno_detalhe.html",
@@ -1104,7 +1193,8 @@ def aluno_detalhe(ra: str) -> Any:
         usuario_cargo=usuario_cargo,
         recomendacoes=recomendacoes,
         recomendacao_ia=recomendacao_ia,
-        sheet=sheet
+        evolucao=analise,
+        sheet=sheet,
     )
 
 
@@ -1140,6 +1230,163 @@ def api_search() -> Any:
     ]
 
     return {"results": output}
+
+@app.get("/api/health")
+def api_health():
+    return {
+        "status": "ok",
+        "sistema": "Monitor de Risco Escolar",
+        "versao": "1.0"
+    }
+
+
+@app.get("/api/aluno/<ra>")
+def api_aluno(ra: str):
+
+    sheet = request.args.get("sheet") or DEFAULT_SHEET
+
+    df = _load_df_with_risk(sheet, None, None)
+
+    row = df[df["RA"].astype(str) == str(ra)]
+
+    if row.empty:
+        return {"erro": "Aluno não encontrado"}, 404
+
+    r = row.iloc[0]
+
+    return {
+        "ra": str(r["RA"]),
+        "nome": r["Nome"],
+        "turma": r["Turma"],
+        "media": float(r.get("_media", 0)),
+        "risco": r.get("_risk_label"),
+        "inde": float(r.get("INDE 22", 0)),
+        "matematica": float(r.get("Matem", 0)),
+        "portugues": float(r.get("Portug", 0)),
+        "ingles": float(r.get("Inglês", 0))
+    }
+
+
+@app.post("/api/predict")
+def api_predict():
+
+    data = request.get_json()
+
+    if not data:
+        return {"erro": "JSON inválido"}, 400
+
+    ra = str(data.get("RA"))
+
+    sheet = request.args.get("sheet") or DEFAULT_SHEET
+
+    df = _load_df_with_risk(sheet, None, None)
+
+    row = df[df["RA"].astype(str) == str(ra)]
+
+    if row.empty:
+        return {"erro": "Aluno não encontrado"}, 404
+
+    r = row.iloc[0]
+
+    return {
+        "ra": ra,
+        "risk_score": float(r["_risk_score"]),
+        "risk_label": r["_risk_label"]
+    }
+
+
+@app.post("/api/predict-batch")
+def api_predict_batch():
+
+    data = request.get_json()
+
+    if not isinstance(data, list):
+        return {"erro": "Envie uma lista de alunos"}, 400
+
+    results = []
+
+    for item in data:
+
+        ra = str(item.get("RA"))
+
+        df = _load_df_with_risk(DEFAULT_SHEET, None, None)
+
+        row = df[df["RA"].astype(str) == str(ra)]
+
+        if row.empty:
+            continue
+
+        r = row.iloc[0]
+
+        results.append({
+            "ra": ra,
+            "risk_score": float(r["_risk_score"]),
+            "risk_label": r["_risk_label"]
+        })
+
+    return {"predictions": results}
+
+@app.get("/api/model-info")
+def api_model_info():
+
+    pre, model, metadata = _load_model_bundle()
+
+    return {
+        "modelo": "RandomForestClassifier",
+        "versao": metadata.get("model_version", "desconhecida"),
+        "features": metadata.get("feature_columns", [])
+    }
+
+@app.get("/api")
+def api_docs():
+
+    return {
+        "endpoints": {
+            "health": "/api/health",
+            "aluno": "/api/aluno/<ra>",
+            "predict": "/api/predict",
+            "predict_batch": "/api/predict-batch",
+            "model_info": "/api/model-info",
+            "tendencia": "/api/tendencia"
+        }
+    }
+
+
+@app.get("/api-docs")
+def api_docs_page():
+    return render_template("api_docs.html")
+
+@app.get("/api/search")
+def api_search_alunos():
+
+    q = request.args.get("q", "").strip().lower()
+    sheet = request.args.get("sheet") or DEFAULT_SHEET
+
+    if not q:
+        return {"results": []}
+
+    df = _load_df_with_risk(sheet, None, None)
+
+    mask = (
+        df["Nome"].astype(str).str.lower().str.contains(q)
+        | df["RA"].astype(str).str.contains(q)
+        | df["Turma"].astype(str).str.lower().str.contains(q)
+    )
+
+    res = df[mask].head(10)
+
+    results = []
+
+    for _, r in res.iterrows():
+        results.append({
+            "ra": str(r["RA"]),
+            "nome": r["Nome"],
+            "turma": r["Turma"],
+            "risco": r.get("_risk_label", "")
+        })
+
+    return {"results": results}
+
 
 @app.get("/alunos-risco")
 def alunos_risco() -> Any:
@@ -1217,6 +1464,57 @@ def alunos_risco() -> Any:
         q=q or "",
         escolas=escolas,
     )
+
+
+def analisar_evolucao_aluno(ra: str) -> dict:
+    """
+    Analisa histórico 2022-2024 de um aluno
+    e retorna recomendações pedagógicas.
+    """
+
+    df22 = _load_df_with_risk("PEDE2022", None, None)
+    df23 = _load_df_with_risk("PEDE2023", None, None)
+    df24 = _load_df_with_risk("PEDE2024", None, None)
+
+    hist = pd.concat([
+        df22.assign(ano=2022),
+        df23.assign(ano=2023),
+        df24.assign(ano=2024)
+    ])
+
+    hist = hist[hist["RA"].astype(str) == str(ra)]
+
+    if hist.empty:
+        return {
+            "sem_progresso": False,
+            "proxima_fase": False,
+            "mensagem": "Histórico insuficiente."
+        }
+
+    hist = hist.sort_values("ano")
+
+    inde = pd.to_numeric(hist["INDE 22"], errors="coerce").fillna(0).values
+    pedras = hist[["Pedra 20","Pedra 21","Pedra 22"]].fillna(0).values
+
+    # progresso
+    progresso_inde = (inde[1:] > inde[:-1]).any()
+    progresso_pedra = (pedras[1:] > pedras[:-1]).any()
+
+    sem_progresso = not (progresso_inde or progresso_pedra)
+
+    risco = hist["_risk_label"].iloc[-1]
+
+    proxima_fase = (
+        inde[-1] > inde[0]
+        and risco in ["Regular", "Médio"]
+    )
+
+    return {
+        "sem_progresso": sem_progresso,
+        "proxima_fase": proxima_fase,
+        "mensagem": ""
+    }
+
 
 @app.route("/api/tendencia", methods=["GET"])
 def api_tendencia() -> dict:

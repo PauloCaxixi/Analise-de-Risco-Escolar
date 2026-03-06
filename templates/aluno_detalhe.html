@@ -30,7 +30,10 @@
         <div class="card-header"><span class="card-title">Risco (IA)</span></div>
         <div class="card-body">
             <div class="card-value" style="font-size:26px;">{{ aluno.risco }}</div>
-            <div class="card-subtitle">Confiança: {{ (aluno.risk_score * 100) | round(0) }}%</div>
+            <div class="card-subtitle">
+                Confiança:
+                {{ ((aluno.risk_score | default(0) | float) * 100) | round(0) }}%
+            </div>
         </div>
     </div>
 
@@ -73,6 +76,30 @@
                     "{{ diagnostico }}"
                 </p>
             </div>
+        </div>
+
+        <div class="card">
+        <div class="card-header">
+            <h3>Análise de Evolução Acadêmica</h3>
+        </div>
+
+        <div class="card-body">
+
+            {% if evolucao.sem_progresso %}
+            <p style="color:#dc2626; font-weight:700;">
+                ⚠ Este aluno não apresenta progresso acadêmico há múltiplos anos.
+                Recomenda-se intervenção pedagógica intensiva.
+            </p>
+            {% endif %}
+
+            {% if evolucao.proxima_fase %}
+            <p style="color:#16a34a; font-weight:700;">
+                ✔ O aluno demonstra evolução consistente e pode ser considerado
+                para avanço de fase.
+            </p>
+            {% endif %}
+
+        </div>
         </div>
 
         <div class="table-card">

@@ -648,3 +648,38 @@ textarea:focus {
     padding: 12px 24px !important;
     margin-top: 0 !important;
 }
+
+.search-results{
+    position:absolute;
+    background:white;
+    border:1px solid #ddd;
+    border-radius:8px;
+    width:100%;
+    max-height:250px;
+    overflow:auto;
+    box-shadow:0 6px 12px rgba(0,0,0,0.1);
+    display:none;
+    z-index:1000;
+}
+
+.search-item{
+    padding:8px 10px;
+    cursor:pointer;
+}
+
+.search-item:hover{
+    background:#f1f5f9;
+}
+
+.search-results{
+    position:absolute;
+    background:white;
+    border:1px solid #ddd;
+    border-radius:6px;
+    width:100%;
+    max-height:250px;
+    overflow:auto;
+    box-shadow:0 6px 14px rgba(0,0,0,0.1);
+    display:none;
+    z-index:1000;
+}

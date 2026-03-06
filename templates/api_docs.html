@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}API do Sistema{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <h1>Integração via API</h1>
+  <small class="muted">
+    Utilize os botões abaixo para acessar os dados do sistema
+  </small>
+</div>
+
+
+<div class="cards-row">
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Status da API</span>
+    </div>
+
+    <div class="card-body">
+      <p>Verificar se o sistema está online.</p>
+
+      <a class="btn btn-primary"
+         href="/api/health"
+         target="_blank">
+         Abrir Endpoint
+      </a>
+    </div>
+  </div>
+
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Informações do Modelo</span>
+    </div>
+
+    <div class="card-body">
+      <p>Detalhes sobre o modelo de Machine Learning.</p>
+
+      <a class="btn btn-primary"
+         href="/api/model-info"
+         target="_blank">
+         Abrir Endpoint
+      </a>
+    </div>
+  </div>
+
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Tendência de Risco</span>
+    </div>
+
+    <div class="card-body">
+      <p>Dados usados nos gráficos do dashboard.</p>
+
+      <a class="btn btn-primary"
+         href="/api/tendencia"
+         target="_blank">
+         Abrir Endpoint
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Consultar aluno pela API</span>
+  </div>
+
+  <div class="card-body">
+
+    <div style="max-width:450px; position:relative;">
+
+        <input id="api_ra_search"
+               placeholder="Digite nome ou RA do aluno"
+               style="width:100%;">
+
+
+        <div id="api_search_results"
+             class="search-results">
+        </div>
+
+    </div>
+
+  </div>
+</div>
+
+
+<script>
+
+document.addEventListener("DOMContentLoaded", function(){
+
+    const input = document.getElementById("api_ra_search");
+    const results = document.getElementById("api_search_results");
+
+    if(!input) return;
+
+    input.addEventListener("input", function(){
+
+        let q = input.value.trim();
+
+        if(q.length < 2){
+            results.innerHTML = "";
+            results.style.display = "none";
+            return;
+        }
+
+        fetch("/api/search?q=" + encodeURIComponent(q))
+        .then(r => r.json())
+        .then(data => {
+
+            results.innerHTML = "";
+
+            if(!data.results || data.results.length === 0){
+                results.style.display = "none";
+                return;
+            }
+
+            data.results.forEach(a => {
+
+                let div = document.createElement("div");
+
+                div.style.padding = "8px";
+                div.style.cursor = "pointer";
+                div.style.borderBottom = "1px solid #eee";
+
+                div.innerHTML = `
+                    <strong>${a.nome}</strong>
+                    <br>
+                    <small>
+                    RA: ${a.ra} | Turma: ${a.turma} | Risco: ${a.risco}
+                    </small>
+                `;
+
+                div.onclick = () => {
+                    window.open("/api/aluno/" + a.ra, "_blank");
+                };
+
+                results.appendChild(div);
+
+            });
+
+            results.style.display = "block";
+
+        });
+
+    });
+
+});
+
+
+function consultarAluno(){
+
+    let ra = document.getElementById("ra_input").value;
+
+    if(!ra){
+        alert("Digite um RA");
+        return;
+    }
+
+    window.open("/api/aluno/" + ra, "_blank");
+
+}
+
+</script>
+
+{% endblock %}
