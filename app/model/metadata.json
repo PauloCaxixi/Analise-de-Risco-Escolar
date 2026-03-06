@@ -2,7 +2,7 @@
   "project": "Datathon Passos Magicos - PEDE",
   "model_name": "hgb_classifier",
   "model_version": "1.0.0",
-  "trained_at": "2026-03-05T22:27:11Z",
+  "trained_at": "2026-03-06T02:17:33Z",
   "task": "binary_classification_proba_to_risk_label",
   "target": "Defasagem(t+1) -> P(defasagem)",
   "risk_thresholds": {

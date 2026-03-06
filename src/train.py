@@ -340,19 +340,27 @@ def save_artifacts(
 # CLI
 # =========================
 def parse_args() -> argparse.Namespace:
+    project_root = Path(__file__).resolve().parent.parent
+
+    default_xlsx = project_root / "dashboard" / "data" / "raw" / "BASE DE DADOS PEDE 2024 - DATATHON.xlsx"
+    default_out = project_root / "app" / "model"
+
     p = argparse.ArgumentParser(description="Treino longitudinal PEDE (t -> t+1).")
+
     p.add_argument(
         "--xlsx",
         type=str,
-        required=True,
-        help="Caminho do XLSX (BASE DE DADOS PEDE 2024 - DATATHON.xlsx).",
+        default=str(default_xlsx),
+        help="Caminho do XLSX.",
     )
+
     p.add_argument(
         "--out",
         type=str,
-        default=str(Path("app") / "model"),
-        help="Diretório de saída dos artefatos (model.joblib, preprocessor.joblib, metadata.json).",
+        default=str(default_out),
+        help="Diretório de saída dos artefatos.",
     )
+
     p.add_argument(
         "--log-level",
         type=str,
@@ -360,6 +368,7 @@ def parse_args() -> argparse.Namespace:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Nível de log.",
     )
+
     return p.parse_args()
 
 

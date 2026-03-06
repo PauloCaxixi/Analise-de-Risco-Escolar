@@ -173,16 +173,16 @@ def _predict_risk_with_model(
     model: Any,
     feature_cols: List[str],
 ) -> Tuple[pd.Series, pd.Series]:
-    """
-    Retorna (score, label). Score em [0, 1] se possível; label em {Muito Alto, Alto, Médio, Regular}.
-    """
+
     x = df.reindex(columns=feature_cols)
+
     x_t = preprocessor.transform(x)
 
-    # Classificação: tenta predict_proba; regressão: normaliza score
     score: Optional[pd.Series] = None
+
     try:
         proba = model.predict_proba(x_t)[:, 1]
+
         score = pd.Series(proba, index=df.index, dtype="float64")
 
         def to_label_future(p):
@@ -193,20 +193,31 @@ def _predict_risk_with_model(
             return "Baixo Risco"
 
         label = pd.Series([to_label_future(p) for p in proba], index=df.index)
+
         return score, label
+
     except Exception:
+
         yhat = model.predict(x_t)
-        yhat_s = pd.Series(pd.to_numeric(yhat, errors="coerce"), index=df.index, dtype="float64")
-        # Normaliza robusto para [0, 1]
-        mn, mx = float(yhat_s.min(skipna=True)), float(yhat_s.max(skipna=True))
+
+        yhat_s = pd.Series(
+            pd.to_numeric(yhat, errors="coerce"),
+            index=df.index,
+            dtype="float64",
+        )
+
+        mn = float(yhat_s.min(skipna=True))
+        mx = float(yhat_s.max(skipna=True))
+
         if mx > mn:
             score = (yhat_s - mn) / (mx - mn)
         else:
-            score = pd.Series(0.0, index=df.index, dtype="float64")
+            score = pd.Series(0.0, index=df.index)
 
     s = score.fillna(0.0).clip(0.0, 1.0)
 
-    def to_label(p: float) -> str:
+    def to_label(p: float):
+
         if p >= 0.85:
             return "Muito Alto"
         if p >= 0.70:
@@ -216,6 +227,7 @@ def _predict_risk_with_model(
         return "Regular"
 
     label = s.apply(to_label)
+
     return s, label
 
 
