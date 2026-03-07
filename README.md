@@ -478,3 +478,101 @@ A solução permite:
 * aplicar Machine Learning em dados educacionais reais
 
 >>>>>>> Projeto_Monitoramento_Prevenção
+
+# ☁️ Deploy na AWS (EC2)
+
+A aplicação também pode ser executada em um servidor **AWS EC2**, permitindo acesso remoto ao dashboard educacional.
+
+Arquitetura utilizada:
+
+```
+GitHub
+ ↓
+EC2 (Ubuntu Server)
+ ↓
+Aplicação Flask
+ ↓
+Porta HTTP 5000
+ ↓
+Acesso via navegador
+```
+
+Serviços AWS utilizados:
+
+| Serviço                   | Função                |
+| ------------------------- | --------------------- |
+| **EC2**                   | servidor da aplicação |
+| **Security Group**        | liberação de portas   |
+| **Elastic IP (opcional)** | IP fixo para acesso   |
+
+---
+
+## Criar instância EC2
+
+No console AWS:
+
+```
+EC2 → Launch Instance
+```
+
+Configuração recomendada:
+
+| Configuração  | Valor               |
+| ------------- | ------------------- |
+| AMI           | Ubuntu Server 22.04 |
+| Instance Type | t2.micro            |
+| Storage       | 8GB                 |
+
+---
+
+## Conectar na instância
+
+```
+ssh -i chave.pem ubuntu@IP_PUBLICO
+```
+
+---
+
+## Instalar dependências
+
+```
+sudo apt update
+sudo apt install python3-pip git -y
+```
+
+---
+
+## Clonar o projeto
+
+```
+git clone https://github.com/PauloCaxixi/Analise-de-Risco-Escolar.git
+cd Analise-de-Risco-Escolar
+pip3 install -r requirements.txt
+```
+
+---
+
+## Executar aplicação
+
+```
+cd dashboard
+python3 app.py
+```
+
+A aplicação ficará disponível em:
+
+```
+http://IP_PUBLICO:5000
+```
+
+---
+
+# Resultado
+
+Com isso, o dashboard pode ser acessado remotamente via navegador, permitindo que o sistema seja utilizado por gestores educacionais em qualquer local.
+
+---
+
+
+
+

@@ -1548,48 +1548,48 @@ def api_tendencia() -> dict:
     }
 
 @app.get("/alertas")
-def alertas() -> Any:
-    return redirect(url_for("dashboard"))
+def alertas():
 
-
-@app.get("/turmas")
-def turmas() -> Any:
-    return redirect(url_for("dashboard"))
-
-
-@app.get("/disciplinas")
-def disciplinas() -> Any:
-    return redirect(url_for("dashboard"))
+    return render_template(
+        "maintenance.html",
+        feature="Alertas Prioritários"
+    )
 
 
 @app.get("/evolucao")
-def evolucao() -> Any:
-    return redirect(url_for("dashboard"))
+def evolucao():
 
-
-@app.get("/comparar-turmas")
-def comparar_turmas() -> Any:
-    return redirect(url_for("dashboard"))
+    return render_template(
+        "maintenance.html",
+        feature="Evolução"
+    )
 
 
 @app.get("/relatorios")
-def relatorios() -> Any:
-    return redirect(url_for("dashboard"))
+def relatorios():
 
+    return render_template(
+        "maintenance.html",
+        feature="Relatórios"
+    )
 
-@app.get("/intervencoes")
-def intervencoes() -> Any:
-    return redirect(url_for("dashboard"))
 
 
 @app.get("/configuracoes")
-def configuracoes() -> Any:
-    return redirect(url_for("dashboard"))
+def configuracoes():
+
+    return render_template(
+        "maintenance.html",
+        feature="Configurações"
+    )
 
 
 @app.get("/suporte")
 def suporte() -> Any:
-    return redirect(url_for("dashboard"))
+        return render_template(
+        "maintenance.html",
+        feature="Suporte"
+    )
 
 
 # =========================

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="maintenance-container">
+
+    <div class="maintenance-card">
+
+        <div class="maintenance-icon">
+            ⚙️
+        </div>
+
+        <h1 class="maintenance-title">
+            Página em Manutenção
+        </h1>
+
+        <p class="maintenance-subtitle">
+            Esta funcionalidade estará disponível em breve.
+        </p>
+
+        <div class="maintenance-feature">
+            {{ feature }}
+        </div>
+
+        <p class="maintenance-description">
+            Estamos trabalhando para liberar esta funcionalidade
+            na próxima versão da plataforma.
+        </p>
+
+        <a href="{{ url_for('dashboard') }}" class="btn-back-dashboard">
+            ← Voltar ao Dashboard
+        </a>
+
+    </div>
+
+</div>
+
+{% endblock %}
