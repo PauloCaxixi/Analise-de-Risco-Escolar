@@ -477,7 +477,6 @@ A solução permite:
 * apoiar decisões pedagógicas
 * aplicar Machine Learning em dados educacionais reais
 
->>>>>>> Projeto_Monitoramento_Prevenção
 
 # ☁️ Deploy na AWS (EC2)
 
