@@ -561,7 +561,7 @@ python3 app.py
 A aplicação ficará disponível em:
 
 ```
-http://IP_PUBLICO:5000
+http://54.91.113.84:5000
 ```
 
 ---
